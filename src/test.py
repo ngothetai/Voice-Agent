@@ -20,7 +20,7 @@ def main():
     # Given request of user1
     messages: list = [{
         'role': 'user',
-        'content': "Thời tiết ở San Francisco, Paris thế nào? Vậy thì thời tiết ở Asian/Tokyo là mấy giờ?",
+        'content': "Thời tiết ở San Francisco và Paris thế nào? Vậy thì thời gian ở Asian Hồ Chí Minh là mấy giờ?",
     }]
 
     # Init the function calling
