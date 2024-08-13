@@ -1,8 +1,8 @@
 import json
 from qwen_agent.llm import get_chat_model
-from utils.load_settings import load_settings
-from functions.weather import Weather
-from functions.timer import Timer
+from botvov.utils.load_settings import load_settings
+from botvov.functions.weather import Weather
+from botvov.functions.timer import Timer
 from typing import Dict, List
 
 
@@ -20,7 +20,7 @@ def main():
     # Given request of user1
     messages: list = [{
         'role': 'user',
-        'content': "Thời tiết ở San Francisco, Paris thế nào? Vậy thì thời tiết ở Asian/Tokyo là mấy giờ?",
+        'content': "Thời tiết ở San Francisco và Paris thế nào? Vậy thì thời gian ở Asian Hồ Chí Minh là mấy giờ?",
     }]
 
     # Init the function calling
