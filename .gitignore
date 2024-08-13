@@ -163,7 +163,3 @@ cython_debug/
 
 testing_somethings/
 workspace/
-docker-compose.yml
-Dockerfile
-pyproject.toml
-poetry.lock

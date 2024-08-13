@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  project_server:
+    build: .
+    working_dir: /app/src
+    command: poetry run python run_server.py
+    ports:
+      - "7860:7860"
+    networks:
+      - app_network
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    entrypoint:
+        - /bin/bash
+    command: -c "ollama serve && ollama run qwen2:7b && tail -f /dev/null"
+    networks:
+      - app_network
+
+volumes:
+  ollama:
+
+networks:
+  app_network:
