@@ -1,5 +1,5 @@
 from qwen_agent.gui import WebUI
-from functions import init_agent_service
+from botvov.functions import init_agent_service
 
 
 def app_gui():
@@ -14,4 +14,4 @@ def app_gui():
     WebUI(
         bot,
         chatbot_config=chatbot_config,
-    ).run()
+    ).run(server_name="0.0.0.0")

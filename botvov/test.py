@@ -1,8 +1,8 @@
 import json
 from qwen_agent.llm import get_chat_model
-from utils.load_settings import load_settings
-from functions.weather import Weather
-from functions.timer import Timer
+from botvov.utils.load_settings import load_settings
+from botvov.functions.weather import Weather
+from botvov.functions.timer import Timer
 from typing import Dict, List
 
 

@@ -1,24 +1,30 @@
 version: '3.8'
 
 services:
-  project_server:
-    build: .
-    working_dir: /app/src
-    command: poetry run python run_server.py
+  app_server:
+    container_name: app_server
+    build:
+        context: .
+        target: app_server
+    working_dir: /app
+    command: poetry run python -m botvov.run_server
     ports:
       - "7860:7860"
     networks:
       - app_network
 
   ollama:
-    image: ollama/ollama:latest
+    container_name: ollama
+    build:
+        context: .
+        target: ollama
     volumes:
       - ollama:/root/.ollama
     ports:
       - "11434:11434"
     entrypoint:
         - /bin/bash
-    command: -c "ollama serve && ollama run qwen2:7b && tail -f /dev/null"
+    command: -c "ollama serve && ollama pull qwen2:7b && ollama run qwen2:7b"
     networks:
       - app_network
 

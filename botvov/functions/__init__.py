@@ -1,8 +1,8 @@
-from utils.load_settings import load_settings
+from botvov.utils.load_settings import load_settings
 from typing import Dict
 from qwen_agent.agents import Assistant
 
-SETTINGS: Dict = load_settings("settings.yml")
+SETTINGS: Dict = load_settings("botvov/settings.yml")
 
 
 def init_agent_service():
