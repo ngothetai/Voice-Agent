@@ -1,7 +1,13 @@
 # BOTVOV
 Create assistant for vov
 
-# Run server and use api for chat bot
+# Without docker
+## Prerequisites
+pip install -U pip setuptools
+pip install poetry
+
+## Run server and use api for chat bot
 ```
-python run_server.py
+cd src
+poetry run python run_server.py
 ```
