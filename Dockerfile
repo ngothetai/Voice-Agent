@@ -21,4 +21,5 @@ EXPOSE 7860
 FROM ollama/ollama:latest AS ollama
 WORKDIR /app
 COPY init_llm.sh ./
+RUN chmod +x init_llm.sh
 ENTRYPOINT ["./init_llm.sh"]
