@@ -19,5 +19,6 @@ EXPOSE 7860
 
 
 FROM ollama/ollama:latest AS ollama
-ENTRYPOINT ["/bin/bash", "-c", "ollama serve && ollama pull qwen2:7b && ollama run qwen2:7b"]
-EXPOSE 11434
+WORKDIR /app
+COPY init_llm.sh ./
+ENTRYPOINT ["./init_llm.sh"]

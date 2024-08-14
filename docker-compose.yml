@@ -23,8 +23,17 @@ services:
     ports:
       - "11434:11434"
     entrypoint:
-        - /bin/bash
-    command: -c "ollama serve && ollama pull qwen2:7b && ollama run qwen2:7b"
+      - /bin/bash
+      - -c
+      - |
+        /app/init_llm.sh
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     networks:
       - app_network
 
