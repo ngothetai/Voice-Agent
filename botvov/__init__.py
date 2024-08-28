@@ -1,0 +1,1 @@
+from botvov.main import app

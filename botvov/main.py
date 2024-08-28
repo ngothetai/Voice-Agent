@@ -1,18 +1,21 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from botvov.assistant import QwenAssistant
+import uvicorn
 
-app = Flask(__name__)
+app = FastAPI()
 assistant = QwenAssistant()
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    message = request.json.get('message')
+@app.post('/chat')
+async def chat(request: Request):
+    data = await request.json()
+    message = data.get('message')
     if not message:
-        return jsonify({"error": "No message provided"}), 400
+        return JSONResponse(content={"error": "No message provided"}, status_code=400)
 
     response = assistant.chat(message)
     print(response)
-    return jsonify({"response": response})
+    return JSONResponse(content={"response": response})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
+    uvicorn.run(app, host='0.0.0.0', port=5000)

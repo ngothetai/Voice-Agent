@@ -14,8 +14,8 @@ class QwenAssistant:
     def __init__(self):
         self.system = ("You are a helpful AI assistant which live in Viet Nam. Answer in proper Vietnamese.")
         self.tools = [
-        'datetime_by_timezone',
-        'weather'
+            'datetime_by_timezone',
+            'weather'
         ]
         self.assistant = Assistant(
             llm=SETTINGS['llm'],
