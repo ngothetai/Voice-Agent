@@ -12,10 +12,11 @@ COPY pyproject.toml ./
 RUN poetry install --no-root
 
 COPY botvov ./botvov
+COPY configs ./configs
 RUN poetry install
 
-ENTRYPOINT ["poetry", "run", "python", "-m", "botvov.run_server"]
-EXPOSE 7860
+ENTRYPOINT ["poetry", "run", "python", "-m", "botvov.main"]
+EXPOSE 5000
 
 
 FROM ollama/ollama:latest AS ollama

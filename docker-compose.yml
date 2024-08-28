@@ -7,9 +7,10 @@ services:
         context: .
         target: app_server
     working_dir: /app
-    command: poetry run python -m botvov.run_server
+    command:
+      - poetry run python -m botvov.main
     ports:
-      - "7860:7860"
+      - "5000:5000"
     networks:
       - app_network
 
