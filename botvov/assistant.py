@@ -1,4 +1,5 @@
-from qwen_agent.agents import Assistant
+from qwen_agent.agents import Assistant, FnCallAgent
+
 
 from botvov.commons.utils import load_file_config
 from botvov.functions.weather import Weather
@@ -12,12 +13,12 @@ SETTINGS: Dict = load_file_config("configs/llm.yaml")
 
 class QwenAssistant:
     def __init__(self):
-        self.system = ("You are a helpful AI assistant which live in Viet Nam. Answer in proper Vietnamese.")
+        self.system = ("You are a helpful AI assistant which live in Viet Nam. Answer in proper Vietnamese. But you must answer shot and clear.")
         self.tools = [
             'datetime_by_timezone',
             'weather'
         ]
-        self.assistant = Assistant(
+        self.assistant = FnCallAgent(
             llm=SETTINGS['llm'],
             description='A helpful AI assistant can answer questions and perform tasks.',
             system_message=self.system,
@@ -36,5 +37,5 @@ class QwenAssistant:
         self.messages.extend(response)
         return response
 
-    def reset(self):
-        pass
+    def assistant_instance(self):
+        return self.assistant
