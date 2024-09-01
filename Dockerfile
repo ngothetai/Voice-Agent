@@ -9,6 +9,7 @@ WORKDIR /app
 
 # Copy the dependencies files
 COPY pyproject.toml ./
+COPY ./Qwen-Agent ./Qwen-Agent
 RUN poetry install --no-root
 
 COPY botvov ./botvov
