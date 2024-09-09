@@ -12,6 +12,11 @@ qwen-agent = {path = "./Qwen-Agent/", extras = ["gui", "rag", "code-interpreter"
 pydantic = "^2.8.2"
 flask = "^3.0.3"
 requests = "^2.32.3"
+torch = "2.4.1"
+soundfile = "0.12.1"
+tqdm = "4.66.5"
+numpy = "1.26.4"
+python-dotenv = "1.0.1"
 
 
 [build-system]

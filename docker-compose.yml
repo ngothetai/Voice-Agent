@@ -9,6 +9,8 @@ services:
     working_dir: /app
     command:
       - poetry run python -m botvov.main
+    volumes:
+      - ./outputs/:/app/outputs
     ports:
       - "5000:5000"
     networks:
