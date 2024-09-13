@@ -1,4 +1,7 @@
-from fastapi import FastAPI, Request
+import asyncio
+import io
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.websockets import WebSocketState
 from qwen_agent.gui import WebUI
 from botvov.assistant import QwenAssistant
 import uvicorn
@@ -9,6 +12,7 @@ import torch
 import json, os
 from types import SimpleNamespace
 import soundfile as sf
+import base64
 
 from botvov.text2speech import Text2Speech
 from dotenv import load_dotenv
@@ -19,7 +23,7 @@ config_file = os.environ['CONFIG_FILE']
 duration_model_path = os.environ['DURATION_MODEL'] 
 lightspeed_model_path = os.environ['LIGHTSPEED_MODEL_PATH']
 phone_set_file = os.environ['PHONE_SET_FILE']
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cuda"
 # Load configuration and phone set
 
 with open(config_file, "r") as f:
@@ -43,10 +47,19 @@ text2speech = Text2Speech(
     phone_set_file=phone_set_file,
     device=device,
 )
+
+duration_net, generator = text2speech.load_models()
 #===== function call =====
 def TTS_service(text:str):
-    sampling_rate, output = text2speech.speak(text)
-    return sampling_rate,output
+    sampling_rate, output = text2speech.speak(text,duration_net,generator)
+    # Convert the output to a bytes buffer
+    buffer = io.BytesIO()
+    sf.write(buffer, output, sampling_rate, format='WAV')
+    buffer.seek(0)
+
+    # Encode the buffer to base64
+    audio_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+    return audio_base64
 #======== end ===============
 
 
@@ -57,11 +70,43 @@ def main():
     webUI = WebUI(assistant.assistant_instance())
     io = webUI.run(launch=False)
 
+    # init home path
     @app.get('/')
     async def home():
         return {"message": "Welcome to VOV Assistant!"}
 
-    @app.post('/api')
+    #=====================================================================================
+    # init chat api
+    @app.websocket('/api')
+    async def websocket_endpoint(websocket: WebSocket):
+        await websocket.accept()
+        try:
+            while True:
+                data = await websocket.receive_json()
+                message = data.get('message')
+
+                response = assistant.chat(message)
+                try:
+                    content = response[-1]['content']
+                except:
+                    content = "Không có kết quả"
+
+                #================
+                audio_base64 = TTS_service(content)
+
+                # Send the base64 string to the front-end
+                await websocket.send_json({"response": response, "audio": audio_base64})
+                
+        except WebSocketDisconnect:
+            print("WebSocket disconnected")
+        except Exception as e:
+            print(f"Error: {e}")
+        finally:
+            if websocket.client_state != WebSocketState.DISCONNECTED:
+                await websocket.close()
+    
+    
+    @app.post('/chat')
     async def chat(request: Request):
         data = await request.json()
         message = data.get('message')
@@ -69,23 +114,13 @@ def main():
             return JSONResponse(content={"error": "No message provided"}, status_code=400)
 
         response = assistant.chat(message)
-        try:
-            content= response[-1]['content']
-        except:
-            content = "Không có kết quả"
-        print(response)
-        #================
-        sampling_rate, output = TTS_service(content)
-        output_dir = 'outputs'
-        os.makedirs(output_dir, exist_ok=True)
-        file_path = f"./{output_dir}/nghiaamthanh.wav"
-        
-        sf.write(file_path, output, sampling_rate)
-        #==============
         return JSONResponse(content={"response": response})
-    app = gr.mount_gradio_app(app, io, path="/demo")
     
-    uvicorn.run(app, host='0.0.0.0', port=5000)
+    #=====================================================================================
+    # init webUI path
+    app = gr.mount_gradio_app(app, io, path="/demo")
+    return app
+app = main()
 
 if __name__ == '__main__':
-    main()
+    uvicorn.run(app, host='0.0.0.0', port=5000)

@@ -166,3 +166,5 @@ workspace/
 
 # Ignore all files with .pth extension
 *.pth
+*.bin
+models

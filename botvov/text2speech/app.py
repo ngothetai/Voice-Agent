@@ -182,8 +182,8 @@ class Text2Speech:
         generator = generator.eval()
         return duration_net, generator
 
-    def speak(self, text):
-        duration_net, generator = self.load_models()
+    def speak(self, text,duration_net,generator):
+        # duration_net, generator = self.load_models()
         paragraphs = text.split("\n")
         clips = []  # list of audio clips
         for paragraph in paragraphs:
