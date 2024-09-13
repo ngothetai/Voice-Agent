@@ -1,13 +1,5 @@
-FROM nvidia/cuda:11.4.3-base-ubuntu20.04 AS app_server
+FROM python:3.12-slim AS app_server
 
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y ffmpeg software-properties-common && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.12 python3-pip python3.12-distutils && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 # Install Poetry
 RUN pip install poetry
 ENV POETRY_NO_INTERACTION=1 \

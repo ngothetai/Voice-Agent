@@ -16,6 +16,7 @@ import base64
 
 from botvov.text2speech import Text2Speech
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 #========fixed TTS===========
@@ -23,7 +24,7 @@ config_file = os.environ['CONFIG_FILE']
 duration_model_path = os.environ['DURATION_MODEL'] 
 lightspeed_model_path = os.environ['LIGHTSPEED_MODEL_PATH']
 phone_set_file = os.environ['PHONE_SET_FILE']
-device = "cuda"
+device = "cpu"
 # Load configuration and phone set
 
 with open(config_file, "r") as f:
@@ -83,9 +84,25 @@ def main():
         try:
             while True:
                 data = await websocket.receive_json()
-                message = data.get('message')
+                data = json.loads(data)
+                audio_base64 = data.get('audio')
+                
+                # Decode the base64 string to a bytes buffer
+                buffer = io.BytesIO(base64.b64decode(audio_base64))
+                buffer.seek(0)
+                
+                client = OpenAI(api_key="cant-be-empty", base_url="http://0.0.0.0:9000/v1/")
 
-                response = assistant.chat(message)
+                audio_file = httpx.File(buffer, content_type="audio/wav")
+                transcript = client.audio.transcriptions.create(
+                    model="./models/PhoWhisper-small-ct2", file=audio_file
+                )
+                message = transcript.text
+                
+                # Send the transcript to the front-end
+                await websocket.send_json({"transcript": message})
+
+                response = assistant.chat("xin chào")
                 try:
                     content = response[-1]['content']
                 except:

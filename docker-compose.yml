@@ -6,7 +6,7 @@ services:
         target: app_server
     working_dir: /app
     command:
-      - poetry run python -m botvov.debug_server
+      - python -m botvov.debug_server
     volumes:
       - ./botvov:/app/botvov
     ports:
@@ -17,7 +17,9 @@ services:
       resources:
         reservations:
           devices:
-            - capabilities: ["gpu"]
+            - driver: nvidia
+              device_ids: ['all']
+              capabilities: [gpu]
 
   ollama:
     container_name: ollama
@@ -38,8 +40,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
+              device_ids: ['all']
+              capabilities: [gpu]
     networks:
       - app_network
 
@@ -60,7 +62,9 @@ services:
       resources:
         reservations:
           devices:
-            - capabilities: ["gpu"]
+            - driver: nvidia
+              device_ids: ['all']
+              capabilities: [gpu]
               # If you have CDI feature enabled use the following instead
               # https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/cdi-support.html
               # https://docs.docker.com/reference/cli/dockerd/#enable-cdi-devices
