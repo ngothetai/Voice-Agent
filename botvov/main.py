@@ -1,6 +1,7 @@
 import asyncio
 import io
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
 from fastapi.websockets import WebSocketState
 from qwen_agent.gui import WebUI
 from botvov.assistant import QwenAssistant
@@ -62,6 +63,17 @@ def TTS_service(text:str):
     audio_base64 = base64.b64encode(buffer.read()).decode('utf-8')
     return audio_base64
 #======== end ===============
+client = OpenAI(api_key="cant-be-empty", base_url="http://speech2text:9000/v1/")
+def STT_service(audio_base64:str):
+    global client
+    buffer = io.BytesIO(base64.b64decode(audio_base64))
+    buffer.seek(0)
+    audio_file = buffer.read()
+    transcript = client.audio.transcriptions.create(
+        model="./models/PhoWhisper-small-ct2", file=audio_file, language="vi"
+    )
+    message = transcript.text
+    return message
 
 
 def main():
@@ -83,26 +95,21 @@ def main():
         await websocket.accept()
         try:
             while True:
-                data = await websocket.receive_json()
+                data = await websocket.receive_text()
                 data = json.loads(data)
-                audio_base64 = data.get('audio')
                 
-                # Decode the base64 string to a bytes buffer
-                buffer = io.BytesIO(base64.b64decode(audio_base64))
-                buffer.seek(0)
+                data_type = data['type']
+                if data_type == 'audio':
+                    audio_base64 = data['audio']
                 
-                client = OpenAI(api_key="cant-be-empty", base_url="http://0.0.0.0:9000/v1/")
+                    # Decode the base64 string to a bytes buffer
+                    message = STT_service(audio_base64)
+                    
+                    await websocket.send_json({"transcript": message})
+                else:
+                    message = data['message']
 
-                audio_file = httpx.File(buffer, content_type="audio/wav")
-                transcript = client.audio.transcriptions.create(
-                    model="./models/PhoWhisper-small-ct2", file=audio_file
-                )
-                message = transcript.text
-                
-                # Send the transcript to the front-end
-                await websocket.send_json({"transcript": message})
-
-                response = assistant.chat("xin chào")
+                response = assistant.chat(message)
                 try:
                     content = response[-1]['content']
                 except:
@@ -112,15 +119,10 @@ def main():
                 audio_base64 = TTS_service(content)
 
                 # Send the base64 string to the front-end
-                await websocket.send_json({"response": response, "audio": audio_base64})
+                await websocket.send_json({"response": content, "audio": audio_base64})
                 
-        except WebSocketDisconnect:
-            print("WebSocket disconnected")
-        except Exception as e:
-            print(f"Error: {e}")
-        finally:
-            if websocket.client_state != WebSocketState.DISCONNECTED:
-                await websocket.close()
+        except (WebSocketDisconnect, ConnectionClosed):
+            print("Client disconnected")
     
     
     @app.post('/chat')
