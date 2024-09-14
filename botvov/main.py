@@ -9,60 +9,11 @@ import uvicorn
 from fastapi.responses import JSONResponse, StreamingResponse
 import httpx
 import gradio as gr
-import torch
-import json, os
-from types import SimpleNamespace
-import soundfile as sf
+import json
 import base64
-
-from botvov.text2speech import Text2Speech
-from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv()
-#========fixed TTS===========
-config_file = os.environ['CONFIG_FILE']
-duration_model_path = os.environ['DURATION_MODEL'] 
-lightspeed_model_path = os.environ['LIGHTSPEED_MODEL_PATH']
-phone_set_file = os.environ['PHONE_SET_FILE']
-device = "cpu"
-# Load configuration and phone set
 
-with open(config_file, "r") as f:
-    hps = json.load(f, object_hook=lambda x: SimpleNamespace(**x))
-    f.close()
-with open(phone_set_file, "r") as f:
-    phone_set = json.load(f)
-    f.close()
-
-assert phone_set[0][1:-1] == "SEP"
-assert "sil" in phone_set
-sil_idx = phone_set.index("sil")
-
-text2speech = Text2Speech(
-    hps=hps,
-    phone_set=phone_set,
-    sil_idx=sil_idx,
-    config_file=config_file,
-    duration_model_path=duration_model_path,
-    lightspeed_model_path=lightspeed_model_path,
-    phone_set_file=phone_set_file,
-    device=device,
-)
-
-duration_net, generator = text2speech.load_models()
-#===== function call =====
-def TTS_service(text:str):
-    sampling_rate, output = text2speech.speak(text,duration_net,generator)
-    # Convert the output to a bytes buffer
-    buffer = io.BytesIO()
-    sf.write(buffer, output, sampling_rate, format='WAV')
-    buffer.seek(0)
-
-    # Encode the buffer to base64
-    audio_base64 = base64.b64encode(buffer.read()).decode('utf-8')
-    return audio_base64
-#======== end ===============
 client = OpenAI(api_key="cant-be-empty", base_url="http://speech2text:9000/v1/")
 def STT_service(audio_base64:str):
     global client
@@ -116,7 +67,14 @@ def main():
                     content = "Không có kết quả"
 
                 #================
-                audio_base64 = TTS_service(content)
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        "http://text2speech:6000/speak",
+                        json={"text": content},
+                        headers={"Content-Type": "application/json"}
+                    )
+                    response_data = response.json()
+                    audio_base64 = response_data.get("audio_base64_str", "")
 
                 # Send the base64 string to the front-end
                 await websocket.send_json({"response": content, "audio": audio_base64})

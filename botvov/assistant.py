@@ -13,7 +13,7 @@ SETTINGS: Dict = load_file_config("configs/llm.yaml")
 
 class QwenAssistant:
     def __init__(self):
-        self.system = ("You are a helpful AI assistant. Answer shortly and clearly in proper Vietnamese and when referring to time, quantity write them all in words.")
+        self.system = ("You are a helpful AI assistant. Answer shortly and clearly in proper Vietnamese and if you referr to time or quantity, you must answer them all in words and not use the special characters.")
         self.tools = [
             'datetime_by_timezone',
             'weather'

@@ -7,7 +7,6 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=1 \
     POETRY_CACHE_DIR=/tmp/poetry_cache
 WORKDIR /app
-
 # Copy the dependencies files
 COPY pyproject.toml ./
 COPY ./Qwen-Agent ./Qwen-Agent
@@ -22,7 +21,7 @@ EXPOSE 5000
 
 FROM ollama/ollama:latest AS ollama
 WORKDIR /app
-COPY init_llm.sh ./
+COPY ./scripts/init_llm.sh ./
 RUN chmod +x init_llm.sh
 ENTRYPOINT ["./init_llm.sh"]
 
@@ -46,7 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY ./speech2text/src ./speech2text/pyproject.toml ./
 COPY ./speech2text/uv.lock ./
 COPY ./models ./models
-COPY ./ct2_converter.sh ./
+COPY ./scripts/ct2_converter.sh ./
 RUN chmod +x ct2_converter.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
@@ -55,3 +54,22 @@ ENV WHISPER__INFERENCE_DEVICE=auto
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=9000
 # CMD ["uv", "run", "uvicorn", "faster_whisper_server.main:app"]
+
+
+FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime AS text2speech
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY .env /app/.env
+COPY ./configs /app/configs
+COPY ./models/text2speech/ /app/models/
+COPY ./text2speech/requirements.txt /app/requirements.txt
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY text2speech /app/text2speech
+
+ENTRYPOINT [ "python", "-m", "text2speech.main" ]
