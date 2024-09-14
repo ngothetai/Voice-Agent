@@ -1,4 +1,0 @@
-llm:
-  model: "qwen2:7b"
-  model_server: "http://ollama:11434/v1/"
-  api_key: ""

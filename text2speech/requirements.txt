@@ -1,0 +1,10 @@
+argparse
+gradio
+regex
+torch
+soundfile
+requests
+tqdm
+numpy==1.26.4 
+pydantic
+python-dotenv

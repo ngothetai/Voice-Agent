@@ -1,0 +1,101 @@
+services:
+  app_server:
+    container_name: app_server
+    build:
+        context: .
+        target: app_server
+    image: app_server
+    working_dir: /app
+    command:
+      - python -m botvov.debug_server
+    volumes:
+      - ./botvov:/app/botvov
+    ports:
+      - "5000:5000"
+    networks:
+      - app_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['all']
+              capabilities: [gpu]
+
+  ollama:
+    container_name: ollama
+    build:
+        context: .
+        target: ollama
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        /app/init_llm.sh
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['all']
+              capabilities: [gpu]
+    networks:
+      - app_network
+
+  faster-whisper-server-cuda:
+    container_name: speech2text
+    build:
+      context: .
+      target: speech2text
+    image: speech2text
+    restart: unless-stopped
+    ports:
+      - 9000:9000
+    volumes:
+      - ./models:/root/faster-whisper-server/models
+    command: >
+      bash -c "./ct2_converter.sh
+      && uv run uvicorn faster_whisper_server.main:app"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['all']
+              capabilities: [gpu]
+              # If you have CDI feature enabled use the following instead
+              # https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/cdi-support.html
+              # https://docs.docker.com/reference/cli/dockerd/#enable-cdi-devices
+              # - driver: cdi
+              #   device_ids:
+              #   - nvidia.com/gpu=all
+    networks:
+      - app_network
+
+  text2speech:
+    container_name: text2speech
+    build: 
+      context: .
+      target: text2speech
+    image: text2speech
+    ports:
+      - 6000:6000
+    volumes:
+      - ./text2speech:/app/text2speech
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+    command: 
+      - python -m text2speech.server
+    networks:
+      - app_network
+
+volumes:
+  ollama:
+
+networks:
+  app_network:

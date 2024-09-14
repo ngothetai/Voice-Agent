@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="llm_command" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="llm_command" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="botvov" project-jdk-type="Python SDK" />
 </project>
