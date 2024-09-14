@@ -30,10 +30,6 @@ def STT_service(audio_base64:str):
 def main():
     app = FastAPI()
 
-    assistant = QwenAssistant()
-    webUI = WebUI(assistant.assistant_instance())
-    io = webUI.run(launch=False)
-
     # init home path
     @app.get('/')
     async def home():
@@ -60,6 +56,7 @@ def main():
                 else:
                     message = data['message']
 
+                assistant = QwenAssistant()
                 response = assistant.chat(message)
                 try:
                     content = response[-1]['content']
@@ -89,13 +86,10 @@ def main():
         message = data.get('message')
         if not message:
             return JSONResponse(content={"error": "No message provided"}, status_code=400)
-
+        assistant = QwenAssistant()
         response = assistant.chat(message)
         return JSONResponse(content={"response": response})
     
-    #=====================================================================================
-    # init webUI path
-    app = gr.mount_gradio_app(app, io, path="/demo")
     return app
 app = main()
 
