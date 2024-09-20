@@ -8,6 +8,8 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_CACHE_DIR=/tmp/poetry_cache
 WORKDIR /app
 # Copy the dependencies files
+COPY ./work.duchungtech.com.key ./
+COPY ./work.duchungtech.com.crt ./
 COPY pyproject.toml ./
 COPY ./Qwen-Agent ./Qwen-Agent
 RUN poetry install --no-root

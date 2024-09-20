@@ -1,8 +1,10 @@
 import asyncio
 import io
+from pathlib import Path
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 from fastapi.websockets import WebSocketState
+from fastapi.middleware.cors import CORSMiddleware
 from qwen_agent.gui import WebUI
 from botvov.assistant import QwenAssistant
 import uvicorn
@@ -27,8 +29,17 @@ def STT_service(audio_base64:str):
     return message
 
 
-def main():
+def runner():
     app = FastAPI()
+    
+    # Configure CORS with default settings
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allows all origins
+        allow_credentials=True,
+        allow_methods=["*"],  # Allows all methods
+        allow_headers=["*"],  # Allows all headers
+    )
 
     # init home path
     @app.get('/')
@@ -91,7 +102,15 @@ def main():
         return JSONResponse(content={"response": response})
     
     return app
-app = main()
 
-if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=5000)
+app = runner()
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "botvov.main:app",
+        host="0.0.0.0",
+        port=5000,
+        ssl_keyfile="/app/work.duchungtech.com.key",
+        ssl_certfile="/app/work.duchungtech.com.crt",
+        reload=True
+    )

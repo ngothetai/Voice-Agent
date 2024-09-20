@@ -7,7 +7,7 @@ services:
     image: app_server
     working_dir: /app
     command:
-      - python -m botvov.debug_server
+      - poetry run python -m botvov.main
     volumes:
       - ./botvov:/app/botvov
     ports:
