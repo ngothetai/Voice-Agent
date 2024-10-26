@@ -1,7 +1,13 @@
 # BOTVOV
 Create assistant for vov
 
+
+
 # Without docker
+
+
+
+
 ## Prerequisites
 pip install -U pip setuptools
 pip install poetry
@@ -10,4 +16,10 @@ pip install poetry
 ```
 cd src
 poetry run python run_server.py
+```
+
+## With docker
+Download model
+```
+python text2speech/setup.py
 ```
