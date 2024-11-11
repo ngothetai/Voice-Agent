@@ -28,7 +28,9 @@ class Text2Speech:
         self.alphabet =  "aàáảãạăằắẳẵặâầấẩẫậeèéẻẽẹêềếểễệiìíỉĩịoòóỏõọôồốổỗộơờớởỡợuùúủũụưừứửữựyỳýỷỹỵbcdđghklmnpqrstvx"
         self.keep_text_and_num_re = regex.compile(rf"[^\s{self.alphabet}.,0-9]")
         self.keep_text_re = regex.compile(rf"[^\s{self.alphabet}]")
-
+        self.special_char = ['vov','vtv']
+        self.speak_special_char = ['vê ô vê', 'vê tê vê']
+        
     def read_number(self, num: str) -> str:
         if len(num) == 1:
             return self.digits[int(num)]
@@ -81,7 +83,13 @@ class Text2Speech:
                     + self.read_number(parts[2])
                 )
         return num
-
+    #fix custom speck special character 
+    def read_custom_character(self,char:str):
+        for index,character in enumerate(self.special_char):
+            if character.strip() in char:
+               char =  char.replace(character,self.speak_special_char[index])
+        return char
+    
     def text_to_phone_idx(self, text):
         # lowercase
         text = text.lower()
@@ -104,6 +112,8 @@ class Text2Speech:
         text = regex.sub(r"\s+", " ", text)
         # remove leading and trailing spaces
         text = text.strip()
+        text = self.read_custom_character(text)
+        print('*'*20,'#ntext : ',text)
         # convert words to phone indices
         tokens = []
         for c in text:
@@ -193,6 +203,7 @@ class Text2Speech:
             clips.append(self.text_to_speech(duration_net, generator, paragraph))
         y = np.concatenate(clips)
         return self.hps.data.sampling_rate, y
+
 
 
 

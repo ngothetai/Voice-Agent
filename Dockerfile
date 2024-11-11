@@ -65,7 +65,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY .env /app/.env
+# COPY .env /app/.env
 COPY ./configs /app/configs
 COPY ./models/text2speech/ /app/models/
 COPY ./text2speech/requirements.txt /app/requirements.txt
