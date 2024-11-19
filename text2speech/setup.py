@@ -22,7 +22,7 @@ models = [
     
 ]
 
-save_model_directory = '../models'
+save_model_directory = '../models/text2speech'
 os.makedirs(save_model_directory, exist_ok=True)
 
 def download_model(url, filename,save_directory):
