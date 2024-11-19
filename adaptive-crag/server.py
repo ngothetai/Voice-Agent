@@ -14,4 +14,3 @@ router = APIRouter()
 
 class ConversationBOTVOV(pydantic.BaseModel):
     message: str
-    

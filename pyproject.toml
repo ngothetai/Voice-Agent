@@ -2,13 +2,12 @@
 name = "botvov"
 version = "0.1.0"
 description = "An AI assistant support answer questions and do tasks from user"
-authors = ["Your Name <you@example.com>"]
+authors = ["thetai <thetai2382002@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
 ollama = "^0.3.1"
-qwen-agent = {path = "./Qwen-Agent/", extras = ["gui", "rag", "code-interpreter"], develop = true}
 pydantic = "^2.8.2"
 flask = "^3.0.3"
 requests = "^2.32.3"
@@ -19,6 +18,10 @@ pybase64 = "1.4.0"
 python-dotenv = "1.0.1"
 torch = "*"
 openai = "1.45.0"
+fastapi = "0.115.5"
+websockets = "14.1"
+uvicorn = "0.32.0"
+burr = {version = "*", extras = ["developer"]}
 
 
 [build-system]

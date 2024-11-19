@@ -1,16 +1,11 @@
-import asyncio
 import io
-from pathlib import Path
+
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
-from fastapi.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
-from qwen_agent.gui import WebUI
-from botvov.assistant import QwenAssistant
 import uvicorn
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 import httpx
-import gradio as gr
 import json
 import base64
 from openai import OpenAI

@@ -3,7 +3,6 @@ from typing import Iterable, Literal
 
 import instructor
 import lancedb
-from duckduckgo_search import DDGS
 from instructor.exceptions import InstructorRetryException
 from lancedb.db import DBConnection
 from lancedb.embeddings import get_registry
@@ -17,7 +16,7 @@ from burr.tracking import LocalTrackingClient
 from openai import OpenAI
 
 
-MODEL_LLM = "qwen2.5:latest"
+MODEL_LLM = "meta-llama/Llama-3.2-1B"
 ask_ollama = instructor.from_openai(
     OpenAI(
         base_url="http://localhost:11434/v1",

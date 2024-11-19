@@ -11,7 +11,6 @@ WORKDIR /app
 COPY ./work.duchungtech.com.key ./
 COPY ./work.duchungtech.com.crt ./
 COPY pyproject.toml ./
-COPY ./Qwen-Agent ./Qwen-Agent
 RUN poetry install --no-root
 
 COPY configs ./configs
@@ -21,11 +20,14 @@ ENTRYPOINT ["poetry", "run", "python", "-m", "botvov.main"]
 EXPOSE 5000
 
 
-FROM ollama/ollama:latest AS ollama
-WORKDIR /app
-COPY ./scripts/init_llm.sh ./
-RUN chmod +x init_llm.sh
-ENTRYPOINT ["./init_llm.sh"]
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime AS llm_serve
+WORKDIR /serve
+RUN pip install vllm==0.6.4 --no-cache-dir
+ENV HUGGING_FACE_HUB_TOKEN=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
+ENTRYPOINT [ "python", "-m", "vllm.entrypoints.openai.api_server", \
+            "--host", "0.0.0.0", "--port", "8000", \
+            "--model", "meta-llama/Llama-3.2-1B" \
+]
 
 
 FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04 AS speech2text
@@ -58,7 +60,7 @@ ENV UVICORN_PORT=9000
 # CMD ["uv", "run", "uvicorn", "faster_whisper_server.main:app"]
 
 
-FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime AS text2speech
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime AS text2speech
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -73,5 +75,8 @@ COPY ./text2speech/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY text2speech /app/text2speech
+
+ENV CONFIG_FILE=text2speech/configs/config.json
+ENV PHONE_SET_FILE=text2speech/configs/phone_set.json
 
 ENTRYPOINT [ "python", "-m", "text2speech.main" ]
