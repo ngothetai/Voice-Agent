@@ -11,9 +11,8 @@ import base64
 from openai import OpenAI
 
 
-client = OpenAI(api_key="cant-be-empty", base_url="http://speech2text:9000/v1/")
 def STT_service(audio_base64:str):
-    global client
+    client = OpenAI(api_key="cant-be-empty", base_url="http://speech2text:9000/v1/")
     buffer = io.BytesIO(base64.b64decode(audio_base64))
     buffer.seek(0)
     audio_file = buffer.read()
@@ -26,6 +25,7 @@ def STT_service(audio_base64:str):
 
 def runner():
     app = FastAPI()
+    assistant = OpenAI(api_key="cant-be-empty", base_url="http://llm_serve:8000/v1/")
     
     # Configure CORS with default settings
     app.add_middleware(
@@ -62,8 +62,11 @@ def runner():
                 else:
                     message = data['message']
 
-                assistant = QwenAssistant()
-                response = assistant.chat(message)
+                response = assistant.chat.completions.create(
+                    model="meta-llama/Llama-3.2-1B",
+                    messages=message,
+                    temperature=0.8
+                )
                 try:
                     content = response[-1]['content']
                 except:
@@ -92,8 +95,11 @@ def runner():
         message = data.get('message')
         if not message:
             return JSONResponse(content={"error": "No message provided"}, status_code=400)
-        assistant = QwenAssistant()
-        response = assistant.chat(message)
+        response = assistant.chat.completions.create(
+            model="meta-llama/Llama-3.2-1B",
+            messages=message,
+            temperature=0.8
+        )
         return JSONResponse(content={"response": response})
     
     return app
