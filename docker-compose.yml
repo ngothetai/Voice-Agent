@@ -40,6 +40,7 @@ services:
               capabilities: [gpu]
     networks:
       - app_network
+    shm_size: '15gb'
 
   faster-whisper-server-cuda:
     container_name: speech2text

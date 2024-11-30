@@ -9,6 +9,7 @@ import httpx
 import json
 import base64
 from openai import OpenAI
+import logging
 
 
 def STT_service(audio_base64:str):
@@ -61,16 +62,19 @@ def runner():
                     await websocket.send_json({"transcript": message})
                 else:
                     message = data['message']
-
-                response = assistant.chat.completions.create(
+                
+                #@TODO: Must implement the chatbot logic here
+                ##########################################
+                response = assistant.completions.create(
                     model="meta-llama/Llama-3.2-1B",
-                    messages=message,
+                    prompt=message,
                     temperature=0.8
                 )
                 try:
-                    content = response[-1]['content']
+                    content = response.choices[0].text
                 except:
                     content = "Không có kết quả"
+                ##########################################
 
                 #================
                 async with httpx.AsyncClient() as client:
@@ -87,20 +91,6 @@ def runner():
                 
         except (WebSocketDisconnect, ConnectionClosed):
             print("Client disconnected")
-    
-    
-    @app.post('/chat')
-    async def chat(request: Request):
-        data = await request.json()
-        message = data.get('message')
-        if not message:
-            return JSONResponse(content={"error": "No message provided"}, status_code=400)
-        response = assistant.chat.completions.create(
-            model="meta-llama/Llama-3.2-1B",
-            messages=message,
-            temperature=0.8
-        )
-        return JSONResponse(content={"response": response})
     
     return app
 
