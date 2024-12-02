@@ -27,6 +27,10 @@ services:
     build:
       context: .
       target: llm_serve
+      args:
+        - MODEL_NAME=${MODEL_NAME}
+    environment:
+      - MODEL_NAME=${MODEL_NAME}
     volumes:
       - huggingface:/root/.cache/huggingface
     ports:
