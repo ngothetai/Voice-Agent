@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, File, UploadFile
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import uvicorn
@@ -12,7 +12,12 @@ from pydantic import BaseModel
 
 
 class AudioBase64Request(BaseModel):
-    audio_base64: str
+    base64_audio: str
+
+
+class AudioBase64Response(BaseModel):
+    response: str
+    audio: str
 
 
 def encode_audio_to_base64(file_bytes):
@@ -45,8 +50,7 @@ def runner():
         return {"message": "Welcome to VOV Assistant!"}
 
     # init chat api
-    @app.websocket('/api',
-                   )
+    @app.websocket('/ws')
     async def websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         try:
@@ -70,30 +74,54 @@ def runner():
             print("Client disconnected")
 
     # init post api
-    @app.post('/audio',
+    @app.post('/file_audio',
               summary="Process Audio File",
               description="Accepts an audio file, processes it for STT and TTS, and returns the generated audio response.",
-              response_class=FileResponse,)
-    async def post_endpoint(file: UploadFile = File(...)):
-        audio_base64 = encode_audio_to_base64(await file.read())
-        message = STT_service(audio_base64)
+              response_class=FileResponse,
+              responses={
+                200: {
+                    "description": "Successful Response",
+                    "content": {
+                        "audio/wav": {
+                            "example": "output_audio_file.wav"
+                        }
+                    }
+                }
+              }
+    )
+    async def post_file_audio_endpoint(file: UploadFile = File(..., description="Audio file in WAV format", example="audio_file.wav")):
+        base64_audio = encode_audio_to_base64(await file.read())
+        message = STT_service(base64_audio)
         content = generate_response(message)
-        audio_base64 = await TTS_service(content)
+        base64_audio = await TTS_service(content)
         output_file_path = "output_audio_file.wav"
-        decode_base64_to_audio(audio_base64, output_file_path)
+        decode_base64_to_audio(base64_audio, output_file_path)
         return FileResponse(output_file_path, media_type='audio/wav', filename='output_audio_file.wav')
 
-    @app.post('/base64',
+    @app.post('/base64_audio',
                 summary="Process Base64 Audio",
                 description="Accepts audio in Base64 format, processes it for STT and TTS, and returns the response and generated audio as Base64.",
-                response_model=Dict[str, str]
-        )
-    async def post_base64_endpoint(request: AudioBase64Request) -> Dict[str, str]:
-        audio_base64 = request.audio_base64
-        message = STT_service(audio_base64)
+                response_model=AudioBase64Response,
+                responses={
+                    200: {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "example": {
+                                    "response": "Xin chào! Ngày hôm nay của bạn thế nào?",
+                                    "audio": "base64_string"
+                                }
+                            }
+                        }
+                    }
+                }
+    )
+    async def post_base64_audio_endpoint(request: AudioBase64Request = Body(..., example={"base64_audio": "base64_string"})):
+        base64_audio = request.base64_audio
+        message = STT_service(base64_audio)
         content = generate_response(message)
-        audio_base64 = await TTS_service(content)
-        return {"response": content, "audio": audio_base64}
+        base64_audio = await TTS_service(content)
+        return {"response": content, "audio": base64_audio}
 
     return app
 

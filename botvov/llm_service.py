@@ -15,10 +15,10 @@ TEMPERATURE = float(os.getenv('TEMPERATURE', '0.5'))
 ATTEMPTS = int(os.getenv('ATTEMPTS', '10'))
 
 assistant = OpenAI(api_key="cant-be-empty", base_url="http://llm_serve:8000/v1/")
-ask_assistant = instructor.from_openai(assistant)
+# ask_assistant = instructor.from_openai(assistant)
 
 # Get the list of channels by json file
-channel_list = json.load(open("./chanels_vov.json", "r"))
+# channel_list = json.load(open("./chanels_vov.json", "r"))
 
 class Channel(BaseModel):
     id: str = Field(..., pattern=r'^\d+$')
@@ -71,7 +71,7 @@ def generate_response(messages: str):
     
     response = assistant.chat.completions.create(
         model=MODEL_NAME,
-        messages=messages,
+        messages=[{"role": "system", "content": PROMPT_SYSTEM}, {"role": "user", "content": messages}],
         temperature=TEMPERATURE
     )
     try:
