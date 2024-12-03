@@ -11,6 +11,7 @@ endif
 MODEL_NAME := $(shell $(YQ_CMD) e '.llm.model' $(CONFIG_LLM))
 PROMPT_SYSTEM := $(shell $(YQ_CMD) e '.llm.prompt_system' $(CONFIG_LLM))
 TEMPERATURE := $(shell $(YQ_CMD) e '.llm.temperature' $(CONFIG_LLM))
+ATTEMPTS := $(shell $(YQ_CMD) e '.llm.attempts' $(CONFIG_LLM))
 
 .PHONY: run
 
