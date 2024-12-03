@@ -20,14 +20,14 @@ ENTRYPOINT ["poetry", "run", "python", "-m", "botvov.main"]
 EXPOSE 5000
 
 
-FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime AS llm_serve
+FROM vllm/vllm-openai AS llm_serve
 WORKDIR /serve
-RUN pip install vllm==0.6.4 --no-cache-dir
+ARG MODEL_NAME
+ENV MODEL_NAME=$MODEL_NAME
 ENV HUGGING_FACE_HUB_TOKEN=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
-ENTRYPOINT [ "python", "-m", "vllm.entrypoints.openai.api_server", \
-            "--host", "0.0.0.0", "--port", "8000", \
-            "--model", "meta-llama/Llama-3.2-1B" \
-]
+ENV CUDA_DEVICE_ORDER=PCI_BUS_ID
+ENV NCCL_DEBUG=INFO
+ENTRYPOINT python3 -m vllm.entrypoints.openai.api_server --host 0.0.0.0 --port 8000 --model $MODEL_NAME --gpu_memory_utilization 0.8 --tensor-parallel-size 2
 
 
 FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04 AS speech2text
@@ -76,7 +76,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY text2speech /app/text2speech
 
-ENV CONFIG_FILE=text2speech/configs/config.json
-ENV PHONE_SET_FILE=text2speech/configs/phone_set.json
+ENV CONFIG_FILE=configs/text2speech/config.json
+ENV PHONE_SET_FILE=configs/text2speech/phone_set.json
+ENV DURATION_MODEL=models/duration_model.pth
+ENV LIGHTSPEED_MODEL_PATH=models/gen_630k.pth
 
 ENTRYPOINT [ "python", "-m", "text2speech.main" ]
