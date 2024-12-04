@@ -26,7 +26,7 @@
         },
         {
             "id": "7",
-            "name": "VOV4 TP. Hồ Chí Minh"
+            "name": "VOV4 Thành phố Hồ Chí Minh"
         },
         {
             "id": "9",
@@ -38,15 +38,15 @@
         },
         {
             "id": "11",
-            "name": "VOV5 Thai"
+            "name": "VOV5 Thái"
         },
         {
             "id": "12",
-            "name": "VOV5 Laotian"
+            "name": "VOV5 Lào"
         },
         {
             "id": "13",
-            "name": "VOV5 Khmer"
+            "name": "VOV5 Khơ me"
         },
         {
             "id": "14",
@@ -54,19 +54,19 @@
         },
         {
             "id": "15",
-            "name": "VOV GT Hà Nội"
+            "name": "VOV Giao thông Hà Nội"
         },
         {
             "id": "16",
-            "name": "VOV GT HCM"
+            "name": "VOV Giao thông Hồ Chí Minh"
         },
         {
             "id": "17",
-            "name": "VOV Mekong"
+            "name": "VOV Mê kông"
         },
         {
             "id": "91",
-            "name": "VOV4 ĐB Sông Cửu Long"
+            "name": "VOV4 Đồng bằng Sông Cửu Long"
         },
         {
             "id": "92",
@@ -94,113 +94,17 @@
         },
         {
             "id": "110",
-            "name": "VON - Đài PTTH Nghệ An"
-        },
-        {
-            "id": "110",
-            "name": "VON - Đài PTTH Nghệ An"
-        },
-        {
-            "id": "1",
-            "name": "VOV1"
-        },
-        {
-            "id": "2",
-            "name": "VOV2"
-        },
-        {
-            "id": "3",
-            "name": "VOV3"
-        },
-        {
-            "id": "4",
-            "name": "VOV4 Tây Nguyên"
-        },
-        {
-            "id": "5",
-            "name": "VOV4 Miền Trung"
-        },
-        {
-            "id": "6",
-            "name": "VOV4 Tây Bắc và Đông Bắc"
-        },
-        {
-            "id": "7",
-            "name": "VOV4 TP. Hồ Chí Minh"
-        },
-        {
-            "id": "9",
-            "name": "VOV5"
-        },
-        {
-            "id": "10",
-            "name": "VOV5 English 24/7"
-        },
-        {
-            "id": "11",
-            "name": "VOV5 Thai"
-        },
-        {
-            "id": "12",
-            "name": "VOV5 Laotian"
-        },
-        {
-            "id": "13",
-            "name": "VOV5 Khmer"
-        },
-        {
-            "id": "14",
-            "name": "VOV6"
-        },
-        {
-            "id": "15",
-            "name": "VOV GT Hà Nội"
-        },
-        {
-            "id": "16",
-            "name": "VOV GT HCM"
-        },
-        {
-            "id": "17",
-            "name": "VOV Mekong"
-        },
-        {
-            "id": "91",
-            "name": "VOV4 ĐB Sông Cửu Long"
-        },
-        {
-            "id": "92",
-            "name": "VOV5 Spanish"
-        },
-        {
-            "id": "93",
-            "name": "VOV5 German"
-        },
-        {
-            "id": "94",
-            "name": "VOV5 French"
-        },
-        {
-            "id": "95",
-            "name": "VOV5 Russian"
-        },
-        {
-            "id": "96",
-            "name": "VOV5 Japanese"
-        },
-        {
-            "id": "97",
-            "name": "VOV5 Indonesian"
+            "name": "VON - Đài Phát thanh truyền hình Nghệ An"
         }
     ],
     "TV": [
         {
             "id": "21",
-            "name": "VOV TV"
+            "name": "VOV Ti Vi"
         },
         {
             "id": "98",
-            "name": "VTC1"
+            "name": "VTC 1"
         }
     ]
 }
