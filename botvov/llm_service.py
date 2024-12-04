@@ -83,14 +83,12 @@ def generate_response(
         if channel_id in set(available_channels):
             context = f"Hệ thống đang mở kênh {mapping_id2name[channel_id]}"
         else:
-            context = "Kênh không tồn tại trong danh sách các kênh có sẵn"
+            context = "Kênh người dùng yêu cầu không tồn tại trong danh sách các kênh có sẵn"
         query += "\n<additional_context>\n" + context + "\n</additional_context>\n"
-        assistant_response = ask_assistant.chat.completions.create(
+        assistant_response = assistant.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "system", "content": PROMPT_SYSTEM}, {"role": "user", "content": query}],
-            response_model=str,
-            max_retries=ATTEMPTS
-        )
+        ).choices[0].message.content
         return assistant_response, channel_id
     
 
