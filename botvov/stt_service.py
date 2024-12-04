@@ -8,7 +8,7 @@ def STT_service(audio_base64: str):
     buffer.seek(0)
     audio_file = buffer.read()
     transcript = client.audio.transcriptions.create(
-        model="./models/PhoWhisper-small-ct2", file=audio_file, language="vi"
+        model="./models/PhoWhisper-large-ct2", file=audio_file, language="vi"
     )
     message = transcript.text
     return message

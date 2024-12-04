@@ -16,8 +16,9 @@ RUN poetry install --no-root
 COPY configs ./configs
 RUN poetry install
 
+COPY botvov ./botvov
+
 ENTRYPOINT ["poetry", "run", "python", "-m", "botvov.main"]
-EXPOSE 5000
 
 
 FROM vllm/vllm-openai AS llm_serve
@@ -53,7 +54,7 @@ COPY ./scripts/ct2_converter.sh ./
 RUN chmod +x ct2_converter.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
-ENV WHISPER__MODEL=./models/PhoWhisper-small-ct2
+ENV WHISPER__MODEL=./models/PhoWhisper-large-ct2
 ENV WHISPER__INFERENCE_DEVICE=auto
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=9000
