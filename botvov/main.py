@@ -7,6 +7,7 @@ from typing import Dict
 import base64
 
 from websockets import ConnectionClosed
+from websockets.exceptions import ConnectionClosedError
 from botvov.stt_service import STT_service
 from botvov.llm_service import generate_response
 from botvov.tts_service import TTS_service
@@ -67,8 +68,12 @@ def runner():
                     await websocket.send_json({"command": command})
                 audio_base64 = await TTS_service(response)
                 audio_bytes = base64.b64decode(audio_base64)
-                await websocket.send_bytes(audio_bytes)
                 
+                # Split audio_bytes into smaller chunks
+                chunk_size = 1024 * 1024  # 1 MB
+                for i in range(0, len(audio_bytes), chunk_size):
+                    await websocket.send_bytes(audio_bytes[i:i + chunk_size])
+                    
         except (WebSocketDisconnect, ConnectionClosed):
             print("Client disconnected")
     return app

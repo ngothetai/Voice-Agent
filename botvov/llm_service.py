@@ -39,25 +39,21 @@ def generate_response(
     You have the following options:
     1. If you can answer the query directly with your own knowledge, return "assistant".
     2. You will have the channels list with id and name for each. \
-        If the query is directly related to requesting to open a certain channel in the provided list, return the channel id. \
+        If the query is directly related to requesting to open a certain channel in the provided list, return id of this channel. \
         If the requested channel is not available in the list, return "not available".
     </task>
     
-    <available_channels>
+    <available_channels>\n
     """
-    for it in channel_list.values():
-        for channel in it:
-            router_prompt += f"\nchannel_id: {channel['id']} - channel_name: {channel['name']}"
-            mapping_id2name[channel['id']] = channel['name']
-    available_channels = list(mapping_id2name.keys())
+    
+    router_prompt += str(channel_list)
     
     router_prompt += "\n</available_channels>"
     
-    # if chat_history:
-    #     router_prompt += "\n<chat_history>"
-    #     for chat in chat_history:
-    #         router_prompt += f"\n{chat['role']}: {chat['content']}"
-    #     router_prompt += "\n</chat_history>"
+    for it in channel_list.values():
+        for channel in it:
+            mapping_id2name[channel['id']] = channel['name']
+    available_channels = list(mapping_id2name.keys())
     
     router_prompt += f"\n<query>\n{query}\n</query>"
     
@@ -70,38 +66,43 @@ def generate_response(
     
     if response == "assistant":
         # The assistant can answer the query directly -> give the direct query to llm again
-        assistant_response = ask_assistant.chat.completions.create(
+        assistant_response = assistant.chat.completions.create(
             model=MODEL_NAME,
-            messages=[{"role": "system", "content": PROMPT_SYSTEM}, {"role": "user", "content": query}],
-            response_model=str,
-            max_retries=ATTEMPTS
-        )
+            messages=[
+                {
+                    "role": "system",
+                    "content": PROMPT_SYSTEM
+                },
+                {
+                    "role": "user",
+                    "content": "<available_channels>\n" + str(channel_list) + "\n</available_channels>\n" + query
+                }
+            ],
+            temperature=TEMPERATURE
+        ).choices[0].message.content
         return assistant_response, None
     else:
         # Add context to the query and ask llm again
         channel_id = response
         if channel_id in set(available_channels):
-            context = f"Hệ thống bắt đầu mở kênh {mapping_id2name[channel_id]}"
+            context = f"Hệ thống đang bắt đầu mở kênh {mapping_id2name[channel_id]}."
         else:
-            context = "Kênh người dùng yêu cầu không tồn tại trong danh sách các kênh có sẵn"
+            context = "Kênh người dùng yêu cầu không tồn tại trong danh sách các kênh có sẵn."
         query += "\n<additional_context>\n" + context + "\n</additional_context>\n"
+        
+        SUMMARY_RESPONSE = "You are an helpful assistant. You did do something and has result in context. Based on the query and context, give the user the final answer. If you need more information from the user, you can ask the user again to know more."
         assistant_response = assistant.chat.completions.create(
             model=MODEL_NAME,
-            messages=[{"role": "system", "content": PROMPT_SYSTEM}, {"role": "user", "content": query}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": SUMMARY_RESPONSE
+                },
+                {
+                    "role": "user",
+                    "content": query
+                }
+            ],
+            temperature=TEMPERATURE
         ).choices[0].message.content
         return assistant_response, channel_id
-    
-
-# def generate_response(messages: str):
-    # Combine the system prompt with the user's message
-    
-    # response = assistant.chat.completions.create(
-    #     model=MODEL_NAME,
-    #     messages=[{"role": "system", "content": PROMPT_SYSTEM}, {"role": "user", "content": messages}],
-    #     temperature=TEMPERATURE
-    # )
-    # try:
-    #     content = response.choices[0].message.content
-    # except:
-    #     content = "Không có kết quả"
-    # return content

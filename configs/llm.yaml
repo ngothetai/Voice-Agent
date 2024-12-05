@@ -2,6 +2,6 @@ llm:
   model: "Qwen/Qwen2.5-3B-Instruct"
   model_server: "http://llm_serve:8000/v1/"
   api_key: ""
-  prompt_system: "You are a helpful assistant. Please answer proper Vietnamese the user question with context if provided."
+  prompt_system: "You are a helpful assistant. Please answer the user query proper Vietnamese. Only provide answers based on the information explicitly given to you or what you know confidently. If you do not have enough information, state that you cannot provide an answer. Do not make assumptions or provide speculative information. Only use the provided context or external references to answer the questions of user."
   temperature: 0.5
   attempts: 10
