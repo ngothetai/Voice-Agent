@@ -1,5 +1,5 @@
 llm:
-  model: "Qwen/Qwen2.5-1.5B-Instruct"
+  model: "Qwen/Qwen2.5-3B-Instruct"
   model_server: "http://llm_serve:8000/v1/"
   api_key: ""
   prompt_system: "You are a helpful assistant. Please answer proper Vietnamese the user question with context if provided."

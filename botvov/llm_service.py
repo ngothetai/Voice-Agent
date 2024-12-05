@@ -11,7 +11,7 @@ import json
 
 
 # Read configurations from environment variables
-MODEL_NAME = os.getenv('MODEL_NAME', 'Qwen/Qwen2.5-1.5B-Instruct')
+MODEL_NAME = os.getenv('MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
 PROMPT_SYSTEM = os.getenv('PROMPT_SYSTEM', 'You are a helpful assistant. Please answer the following questions to the best of your ability proper Vietnamese.')
 TEMPERATURE = float(os.getenv('TEMPERATURE', '0.5'))
 ATTEMPTS = int(os.getenv('ATTEMPTS', '10'))
@@ -81,7 +81,7 @@ def generate_response(
         # Add context to the query and ask llm again
         channel_id = response
         if channel_id in set(available_channels):
-            context = f"Hệ thống đang mở kênh {mapping_id2name[channel_id]}"
+            context = f"Hệ thống bắt đầu mở kênh {mapping_id2name[channel_id]}"
         else:
             context = "Kênh người dùng yêu cầu không tồn tại trong danh sách các kênh có sẵn"
         query += "\n<additional_context>\n" + context + "\n</additional_context>\n"
