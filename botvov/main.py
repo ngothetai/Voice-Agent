@@ -65,7 +65,7 @@ def runner():
                 
                 response, command = generate_response(message)
                 if command:
-                    await websocket.send_json({"command": command})
+                    await websocket.send_json({"case": command})
                 audio_base64 = await TTS_service(response)
                 audio_bytes = base64.b64decode(audio_base64)
                 
