@@ -18,11 +18,6 @@ def encode_audio_to_base64(file_bytes):
     encoded_string = base64.b64encode(file_bytes).decode('utf-8')
     return encoded_string
 
-def decode_base64_to_audio(base64_string, output_file_path):
-    audio_data = base64.b64decode(base64_string)
-    with open(output_file_path, "wb") as audio_file:
-        audio_file.write(audio_data)
-
 
 class BotVOVState(BaseModel):
     app_id: str
@@ -48,7 +43,6 @@ def _get_applications(project_id: str, app_id: str=None) -> Application:
         builder = (
             ApplicationBuilder()
             .with_graph(graph)
-            # .with_entrypoint("process_input")
             .with_tracker(tracker := LocalTrackingClient(project=project_id))
             .with_identifiers(app_id=app_id)
             .initialize_from(
@@ -67,7 +61,7 @@ def _get_applications(project_id: str, app_id: str=None) -> Application:
             .initialize_from(
                 tracker,
                 resume_at_next_action=True,
-                default_state={"query": "Xin chào"},
+                default_state={"query": "Xin chào", "command": None},
                 default_entrypoint="process_input",
             )
         )
@@ -99,37 +93,39 @@ def runner():
         allow_headers=["*"],  # Allows all headers
     )
 
-    @router.post("/create_new")
-    def create_new_application(project_id: str) -> str:
-        app = _get_applications(project_id)
-        return app.uid
+    # @router.post("/create_new") # not use 
+    # def create_new_application() -> str:
+    #     app = _get_applications("1")
+    #     return app.uid
     
-    @router.post("/get_audio_response/{project_id}/{app_id}")
-    def send_audio_query(project_id: str, app_id: str, audio: UploadFile = File(...)):
+    @router.post("/send_audio_query")
+    def send_audio_query(audio: UploadFile = File(...)):
         audio_bytes = audio.file.read()
         audio_base64 = encode_audio_to_base64(audio_bytes)
         user_query = STT_service(audio_base64)
         response = _run_through(
-            project_id,
-            app_id,
+            "1",
+            "1",
             {
                 "user_query": user_query
             }
         )
         
-        # Call an async TTS funtion
-        audio_response = asyncio.run(TTS_service(response.response))
-        return Response(content=audio_response, media_type="audio/wav")
-        
-    
-    @router.post("/get_command/{project_id}/{app_id}")
-    def get_command(project_id: str, app_id: str):
-        response = BotVOVState.from_app(_get_applications(project_id, app_id))
-
         return {
             "response": response.response,
             "command": response.command
         }
+
+    @router.get("/get_audio_response")
+    def get_audio_response():
+        response = BotVOVState.from_app(_get_applications("1", "1"))
+        # Call an async TTS function
+        audio_base64 = asyncio.run(TTS_service(response.response))
+        audio_response = base64.b64decode(audio_base64)
+        
+        return Response(content=audio_response, media_type="audio/wav", headers={
+            "Content-Disposition": "inline; filename=response.wav"
+        })
 
     app.include_router(router, prefix="/botvov", tags=["botvov-api"])
 

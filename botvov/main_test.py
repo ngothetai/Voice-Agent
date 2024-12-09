@@ -55,13 +55,8 @@ def _get_channel_list(provider: str) -> Dict[str, Dict[str, str]]:
     """
     #@TODO: Change to get from API with vov or vtv provider
     json_channels = json.load(open("./botvov/channels_vov.json", "r"))
-    # mapped_channel_list_and_id: Dict[str, str] = dict()
-    # for it in json_channels.values():
-    #     for channel in it:
-    #         mapped_channel_list_and_id[channel['id']] = channel['name']
     return {
         "channels": json_channels,
-        # "mapped_channel_list_and_id": mapped_channel_list_and_id
     }
 
 def _fallback_tool(response: str) -> Dict[str, str]:
@@ -170,9 +165,15 @@ def _open_channel(channel_id: str) -> Dict[str, Any]:
         }
     }
 
-def _fallback_action(response: str) -> Dict[str, str]:
+def _fallback_action(response: str) -> Dict[str, Any]:
     """Tells the user that the assistant can't do any action -- this should be a fallback"""
-    return {"response": response}
+    return {
+        "action response": response,
+        "command": {
+            "name": "open_channel",
+            "content": None
+        }
+    }
 
 ASSISTANT_ACTIONS = [
     {
