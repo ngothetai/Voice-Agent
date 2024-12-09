@@ -12,13 +12,20 @@ COPY ./work.duchungtech.com.key ./
 COPY ./work.duchungtech.com.crt ./
 COPY pyproject.toml ./
 RUN poetry install --no-root
+RUN poetry add loguru "burr[tracking-client,tracking-server,streamlit,graphviz,hamilton]"
 
 COPY configs ./configs
 RUN poetry install
 
 COPY botvov ./botvov
 
-ENTRYPOINT ["poetry", "run", "python", "-m", "botvov.main"]
+EXPOSE 5000 5001
+
+RUN chmod +x botvov/run_burr_UI.sh
+
+CMD ["sh", "./botvov/run_burr_UI.sh"]
+
+# ENTRYPOINT ["poetry", "run", "python", "-m", "botvov.main"]
 
 
 FROM vllm/vllm-openai AS llm_serve

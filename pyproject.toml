@@ -24,6 +24,7 @@ uvicorn = "0.32.0"
 python-multipart = "0.0.19"
 burr = {version = "*", extras = ["developer","opentelemetry"]}
 instructor = "1.7.0"
+loguru = "0.7.3"
 
 
 [build-system]

@@ -59,7 +59,7 @@ def _get_applications(project_id: str, app_id: str=None) -> Application:
             .with_tracker(tracker := LocalTrackingClient(project=project_id))
             .with_identifiers()
             .initialize_from(
-                tracker,
+                initializer=tracker,
                 resume_at_next_action=True,
                 default_state={"query": "Xin chào", "command": None},
                 default_entrypoint="process_input",
