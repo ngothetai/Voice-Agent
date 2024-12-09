@@ -127,10 +127,11 @@ def select_tool(state: State) -> State:
         model=MODEL_NAME, 
         messages=messages,
         tools=ASSISTANT_TOOLS,
+        temperature=TEMPERATURE,
     )
     
     # Extract the tool name and parameters from OpenAI's response
-    if response.choices[0].message.tool_calls is None:
+    if len(response.choices[0].message.tool_calls) == 0:
         return state.update(
             tool="fallback_tool",
             tool_parameters={
@@ -152,13 +153,19 @@ def call_tool(state: State, tool_function: Callable) -> State:
 
 def _open_channel(channel_id: str) -> Dict[str, str]:
     """
-    Open the channel with the given id.
+    Open the channel with the given its id. User don't know about the channel id.
+    User only know about channel name, so whenever they give any request about the channel it has nothing to do with the channel id.
     """
     #@TODO: Implement: Change to open the channel with the given id
-    return {"Application response": f"Radio is opening the channel with the id: {channel_id}. Wait for a moment."}
+    json_channels = json.load(open("./chanels_vov.json", "r"))
+    mapped_channel_list_and_id: Dict[str, str] = dict()
+    for it in json_channels.values():
+        for channel in it:
+            mapped_channel_list_and_id[channel['id']] = channel['name']
+    return {"Application response": f"Radio is opening the channel: {mapped_channel_list_and_id[channel_id]}. Wait for a moment."}
 
 def _fallback_action(response: str) -> Dict[str, str]:
-    """Tells the user that the assistant can't do that -- this should be a fallback"""
+    """Tells the user that the assistant can't do any action -- this should be a fallback"""
     return {"response": response}
 
 ASSISTANT_ACTIONS = [
@@ -214,18 +221,19 @@ def select_action(state: State) -> State:
             },
         ],
         tools=ASSISTANT_ACTIONS,
+        temperature=TEMPERATURE,
     )
     # Extract the tool name and parameters from OpenAI's response
-    if response.choices[0].message.tool_calls is None:
+    if len(response.choices[0].message.tool_calls) == 0:
         return state.update(
             action="fallback_action",
             action_parameters={
                 "response": "No action was selected, instead response was: {response.choices[0].message}."
             },
         )
-    fn = response.choices[0].message.tool_calls[0].function
-
-    return state.update(action=fn.name, action_parameters=json.loads(fn.arguments))
+    else:
+        fn = response.choices[0].message.tool_calls[0].function
+        return state.update(action=fn.name, action_parameters=json.loads(fn.arguments))
 
 @action(reads=["action_parameters"], writes=["action_response"])
 def call_action(state: State, action_function: Callable) -> State:
@@ -244,9 +252,9 @@ def format_results(state: State) -> State:
             {
                 "role": "system",
                 "content": (
-                    "You are a helpful assistant. You answer use question proper Vietnamese."
-                    "Your goal is to take the"
-                    "data presented and use it to answer the original question:"
+                    "You are a helpful assistant."
+                    "Your task is to answer briefly, accurately and only in Vietnamese."
+                    "Extract and answer the final information as detailed as possible, eliminate all redundant information and unnecessary context."
                 ),
             },
             {
@@ -255,10 +263,11 @@ def format_results(state: State) -> State:
                     f"The original question was: {state['query']}."
                     f"The response from tool calling is: {state['tool_response']}."
                     f"The response from action calling is: {state['action_response']}."
-                    "Please format the data and provide a response that responds to the original query."
+                    "Please answer briefly in Vietnamese, providing only the final information that directly answers the user's question."
                 ),
             },
         ],
+        temperature=TEMPERATURE,
     )
 
     return state.update(final_output=response.choices[0].message.content)
@@ -299,7 +308,7 @@ if __name__ == "__main__":
     action, result, state = app.run(
         halt_after=["format_results"],
         inputs={
-            "user_query": "bật giúp tôi kênh v o v một",
+            "user_query": "Mở giúp tôi kênh v o v 12",
         },
     )
     print(state['final_output'])

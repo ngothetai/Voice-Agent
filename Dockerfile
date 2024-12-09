@@ -28,7 +28,7 @@ ENV MODEL_NAME=$MODEL_NAME
 ENV HUGGING_FACE_HUB_TOKEN=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
 ENV CUDA_DEVICE_ORDER=PCI_BUS_ID
 ENV NCCL_DEBUG=INFO
-ENTRYPOINT python3 -m vllm.entrypoints.openai.api_server --host 0.0.0.0 --port 8000 --model $MODEL_NAME --gpu_memory_utilization 0.8 --tensor-parallel-size 2
+ENTRYPOINT python3 -m vllm.entrypoints.openai.api_server --host 0.0.0.0 --port 8000 --model $MODEL_NAME --gpu_memory_utilization 0.8 --tensor-parallel-size 2 --enable-auto-tool-choice --tool-call-parser hermes
 
 
 FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04 AS speech2text
