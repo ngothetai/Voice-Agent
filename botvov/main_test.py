@@ -1,13 +1,14 @@
 import instructor
 from openai import OpenAI
 import json
-from typing import Callable, Dict
+from typing import Callable, Dict, Tuple, Any
 import base64
 import os
 import functools
 
 from burr.core import State, action, when
 from burr.core.application import ApplicationBuilder
+from burr.core.graph import GraphBuilder
 import inspect
 
 
@@ -28,7 +29,7 @@ def encode_audio_to_base64(file_bytes: bytes) -> str:
 def _get_llm_client():
     assistant = OpenAI(
         api_key="cant-be-empty",
-        base_url="http://localhost:8000/v1",
+        base_url="http://llm_serve:8000/v1",
     )
     return assistant
 
@@ -53,7 +54,7 @@ def _get_channel_list(provider: str) -> Dict[str, Dict[str, str]]:
     There are two available providers: vov and vtv
     """
     #@TODO: Change to get from API with vov or vtv provider
-    json_channels = json.load(open("./chanels_vov.json", "r"))
+    json_channels = json.load(open("./botvov/channels_vov.json", "r"))
     # mapped_channel_list_and_id: Dict[str, str] = dict()
     # for it in json_channels.values():
     #     for channel in it:
@@ -150,19 +151,24 @@ def call_tool(state: State, tool_function: Callable) -> State:
 
 
 ### Define the actions for the assistant
-
-def _open_channel(channel_id: str) -> Dict[str, str]:
+def _open_channel(channel_id: str) -> Dict[str, Any]:
     """
     Open the channel with the given its id. User don't know about the channel id.
     User only know about channel name, so whenever they give any request about the channel it has nothing to do with the channel id.
     """
     #@TODO: Implement: Change to open the channel with the given id
-    json_channels = json.load(open("./chanels_vov.json", "r"))
+    json_channels = json.load(open("./botvov/channels_vov.json", "r"))
     mapped_channel_list_and_id: Dict[str, str] = dict()
     for it in json_channels.values():
         for channel in it:
             mapped_channel_list_and_id[channel['id']] = channel['name']
-    return {"Application response": f"Radio is opening the channel: {mapped_channel_list_and_id[channel_id]}. Wait for a moment."}
+    return {
+        "action response": f"Radio is opening the channel: {mapped_channel_list_and_id[channel_id]}. Wait for a moment.",
+        "command": {
+            "name": "open_channel",
+            "content": channel_id
+        }
+    }
 
 def _fallback_action(response: str) -> Dict[str, str]:
     """Tells the user that the assistant can't do any action -- this should be a fallback"""
@@ -235,11 +241,13 @@ def select_action(state: State) -> State:
         fn = response.choices[0].message.tool_calls[0].function
         return state.update(action=fn.name, action_parameters=json.loads(fn.arguments))
 
-@action(reads=["action_parameters"], writes=["action_response"])
+@action(reads=["action_parameters"], writes=["action_response","command"])
 def call_action(state: State, action_function: Callable) -> State:
     """Action to call the tool. This will be bound to the tool function."""
-    response = action_function(**state["action_parameters"])
-    return state.update(action_response=response)
+    result = action_function(**state["action_parameters"])
+    response = result.get("action response")
+    command = result.get("command")
+    return state.update(action_response=response).update(command=command)
 
 @action(reads=["query", "action_response", "tool_response"], writes=["final_output"])
 def format_results(state: State) -> State:
@@ -273,10 +281,10 @@ def format_results(state: State) -> State:
     return state.update(final_output=response.choices[0].message.content)
 
 
-def application():
+def build_graph():
     """Builds the application."""
     return (
-        ApplicationBuilder()
+        GraphBuilder()
         .with_actions(
             process_input,
             select_tool,
@@ -297,18 +305,20 @@ def application():
             (["open_channel", "fallback_action"], "format_results"),
             ("format_results", "process_input"),
         )
-        .with_entrypoint("process_input")
-        .with_tracker(project="botvov", use_otel_tracing=True)
         .build()
     )
     
 if __name__ == "__main__":
-    app = application()
+    app = (ApplicationBuilder()
+        .with_graph(build_graph())
+        .with_entrypoint("process_input")
+        .with_tracker(project="botvov", use_otel_tracing=True)
+        ).build()
     app.visualize(output_file_path="./botvov.png")
     action, result, state = app.run(
         halt_after=["format_results"],
         inputs={
-            "user_query": "Mở giúp tôi kênh v o v 12",
+            "user_query": "Mở giúp tôi kênh v o v 3",
         },
     )
     print(state['final_output'])

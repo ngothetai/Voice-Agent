@@ -1,26 +1,17 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, File, UploadFile, Body
+import functools
+from fastapi import FastAPI, Response, File, UploadFile, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 import uvicorn
-import json
-from typing import Dict
 import base64
-
-from websockets import ConnectionClosed
-from websockets.exceptions import ConnectionClosedError
+import asyncio
 from botvov.stt_service import STT_service
-from botvov.llm_service import generate_response
 from botvov.tts_service import TTS_service
+from botvov.main_test import build_graph
 from pydantic import BaseModel
+from typing import Dict, Any
 
-
-class AudioBase64Request(BaseModel):
-    base64_audio: str
-
-
-class AudioBase64Response(BaseModel):
-    response: str
-    audio: str
+from burr.core import Application, ApplicationBuilder
+from burr.tracking import LocalTrackingClient
 
 
 def encode_audio_to_base64(file_bytes):
@@ -33,12 +24,72 @@ def decode_base64_to_audio(base64_string, output_file_path):
         audio_file.write(audio_data)
 
 
+class BotVOVState(BaseModel):
+    app_id: str
+    query: str
+    response: str
+    command: Any
+    
+    @staticmethod
+    def from_app(app: Application):
+        state = app.state
+        return BotVOVState(
+            app_id=app.uid,
+            query=state.get("query"),
+            response=state.get("final_output"),
+            command=state.get("command")
+        )
+
+@functools.lru_cache(maxsize=128)
+def _get_applications(project_id: str, app_id: str=None) -> Application:
+    graph = build_graph()
+    tracker = LocalTrackingClient(project=project_id)
+    if app_id is not None:
+        builder = (
+            ApplicationBuilder()
+            .with_graph(graph)
+            # .with_entrypoint("process_input")
+            .with_tracker(tracker := LocalTrackingClient(project=project_id))
+            .with_identifiers(app_id=app_id)
+            .initialize_from(
+                tracker,
+                resume_at_next_action=True,
+                default_state={"query": "Xin chào"},
+                default_entrypoint="process_input",
+            )
+        )
+    else:
+        builder = (
+            ApplicationBuilder()
+            .with_graph(graph)
+            .with_tracker(tracker := LocalTrackingClient(project=project_id))
+            .with_identifiers()
+            .initialize_from(
+                tracker,
+                resume_at_next_action=True,
+                default_state={"query": "Xin chào"},
+                default_entrypoint="process_input",
+            )
+        )
+    return builder.build()
+
+def _run_through(project_id: str, app_id: str, inputs: Dict[str, Any]) -> BotVOVState:  
+    botvov_application = _get_applications(project_id, app_id)
+    botvov_application.run(
+        halt_after=["format_results"],
+        inputs=inputs
+    )
+    return BotVOVState.from_app(botvov_application)
+
+
 def runner():
     app = FastAPI(
         title="VOV Assistant API",
         description="Voice interaction API with speech-to-text and text-to-speech capabilities",
         version="1.0.0",
-        lifespan=None)
+        lifespan=None
+    )
+    router = APIRouter()
     # Configure CORS with default settings
     app.add_middleware(
         CORSMiddleware,
@@ -48,34 +99,46 @@ def runner():
         allow_headers=["*"],  # Allows all headers
     )
 
+    @router.post("/create_new")
+    def create_new_application(project_id: str) -> str:
+        app = _get_applications(project_id)
+        return app.uid
+    
+    @router.post("/get_audio_response/{project_id}/{app_id}")
+    def send_audio_query(project_id: str, app_id: str, audio: UploadFile = File(...)):
+        audio_bytes = audio.file.read()
+        audio_base64 = encode_audio_to_base64(audio_bytes)
+        user_query = STT_service(audio_base64)
+        response = _run_through(
+            project_id,
+            app_id,
+            {
+                "user_query": user_query
+            }
+        )
+        
+        # Call an async TTS funtion
+        audio_response = asyncio.run(TTS_service(response.response))
+        return Response(content=audio_response, media_type="audio/wav")
+        
+    
+    @router.post("/get_command/{project_id}/{app_id}")
+    def get_command(project_id: str, app_id: str):
+        response = BotVOVState.from_app(_get_applications(project_id, app_id))
+
+        return {
+            "response": response.response,
+            "command": response.command
+        }
+
+    app.include_router(router, prefix="/botvov", tags=["botvov-api"])
+
     # init home path
     @app.get('/')
     async def home():
         return {"message": "Welcome to VOV Assistant!"}
 
-    # init chat api
-    @app.websocket('/ws')
-    async def websocket_endpoint(websocket: WebSocket):
-        await websocket.accept()
-        try:
-            while True:
-                audio_bytes = await websocket.receive_bytes()
-                audio_base64 = encode_audio_to_base64(audio_bytes)
-                message = STT_service(audio_base64)
-                
-                response, command = generate_response(message)
-                if command:
-                    await websocket.send_json({"case": command})
-                audio_base64 = await TTS_service(response)
-                audio_bytes = base64.b64decode(audio_base64)
-                
-                # Split audio_bytes into smaller chunks
-                chunk_size = 1024 * 1024  # 1 MB
-                for i in range(0, len(audio_bytes), chunk_size):
-                    await websocket.send_bytes(audio_bytes[i:i + chunk_size])
-                    
-        except (WebSocketDisconnect, ConnectionClosed):
-            print("Client disconnected")
+    
     return app
             
 
