@@ -85,33 +85,97 @@ def runner():
         allow_headers=["*"],  # Allows all headers
     )
 
-    @router.post("/create_new") # not use 
-    def create_new_application() -> str:
+    class CreateApplicationResponse(BaseModel):
+        uid: str
+
+    @router.post("/create_new", response_model=CreateApplicationResponse, summary="Create new app for new user", description="Register new user_id for new client to user later") # not use 
+    def create_new_application():
         new_app = _get_applications(app_id=str(uuid.uuid4()))
-        return new_app.uid
-    
-    @router.post("/send_audio_query")
+        response = CreateApplicationResponse(uid=new_app.uid)
+        return response.model_dump()
+
+    class CommandResponse(BaseModel):
+        type: str
+        message_id: str
+        message: str
+
+    class AudioQueryResponse(BaseModel):
+        status_code: int
+        text_response: str
+        data: CommandResponse | None
+        message: str
+        status: bool
+
+    @router.post("/send_audio_query", response_model=AudioQueryResponse, summary="Send an audio query", description="Processes an audio query and returns the response.")
     def send_audio_query(app_id: str, audio: UploadFile = File(...)):
-        audio_bytes = audio.file.read()
-        audio_base64 = encode_audio_to_base64(audio_bytes)
-        user_query = STT_service(audio_base64)
-        response = _run_through(
-            app_id=app_id,
-            inputs={
-                "user_query": user_query
+        """
+        Processes an audio query and returns the response.
+
+        - **app_id**: The application ID
+        - **audio**: The audio file to be processed
+        """
+        try:
+            audio_bytes = audio.file.read()
+        except Exception as e:
+            return {
+                "status_code": 400,
+                "text_response": "",
+                "data": None,
+                "message": "Invalid file type error",
+                "status": False
             }
-        )
         
+        audio_base64 = encode_audio_to_base64(audio_bytes)
+        
+        try:
+            user_query = STT_service(audio_base64)
+        except Exception as e:
+            return {
+                "status_code": 423,
+                "text_response": "",
+                "data": None,
+                "message": "Error recognition audio",
+                "status": False
+            }
+            
+        try:
+            response = _run_through(
+                app_id=app_id,
+                inputs={
+                    "user_query": user_query
+                }
+            )
+        except Exception as e:
+            return {
+                "status_code": 422,
+                "text_response": "",
+                "data": None,
+                "message": "No response AI",
+                "status": False
+            }
+    
         return {
-            "response": response.response,
-            "command": response.command
+            "status_code": 200,
+            "text_response": response.response,
+            "data": response.command,
+            "message": "Response successful",
+            "status": True
         }
+
 
     @router.get("/get_audio_response")
     def get_audio_response(app_id: str):
         response = BotVOVState.from_app(_get_applications(app_id=app_id))
         # Call an async TTS function
-        audio_base64 = asyncio.run(TTS_service(response.response))
+        try:
+            audio_base64 = asyncio.run(TTS_service(response.response))
+        except Exception as e:
+            return {
+                "status_code": 424,
+                "text_response": "",
+                "message": "Error speech text",
+                "status": False
+            }
         audio_response = base64.b64decode(audio_base64)
         
         return Response(content=audio_response, media_type="audio/wav", headers={

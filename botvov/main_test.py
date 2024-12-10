@@ -1,3 +1,4 @@
+from ast import List
 import instructor
 from openai import OpenAI
 import json
@@ -153,15 +154,16 @@ def _open_channel(channel_id: str) -> Dict[str, Any]:
     """
     #@TODO: Implement: Change to open the channel with the given id
     json_channels = json.load(open("./botvov/channels_vov.json", "r"))
-    mapped_channel_list_and_id: Dict[str, str] = dict()
-    for it in json_channels.values():
-        for channel in it:
-            mapped_channel_list_and_id[channel['id']] = channel['name']
+    mapped_channel_list_and_id: Dict[str, Tuple[str, str]] = dict()
+    for type_channel, l in json_channels.items():
+        for channel in l:
+            mapped_channel_list_and_id[channel['id']] = tuple([channel['name'], type_channel])
     return {
-        "action response": f"Radio is opening the channel: {mapped_channel_list_and_id[channel_id]}. Wait for a moment.",
-        "command": {
-            "name": "open_channel",
-            "content": channel_id
+        "action response": f"Radio is opening the channel: {mapped_channel_list_and_id[channel_id][0]}. Wait for a moment.",
+        "data": {
+            "type": mapped_channel_list_and_id[channel_id][1],
+            "message_id": channel_id,
+            "message": mapped_channel_list_and_id[channel_id][0]
         }
     }
 
@@ -247,7 +249,7 @@ def call_action(state: State, action_function: Callable) -> State:
     """Action to call the tool. This will be bound to the tool function."""
     result = action_function(**state["action_parameters"])
     response = result.get("action response")
-    command = result.get("command")
+    command = result.get("data")
     return state.update(action_response=response).update(command=command)
 
 @action(reads=["query", "action_response", "tool_response"], writes=["final_output"])
