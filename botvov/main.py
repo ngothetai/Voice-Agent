@@ -12,11 +12,15 @@ from typing import Dict, Any
 
 from burr.core import Application, ApplicationBuilder
 from burr.tracking import LocalTrackingClient
+from burr.core.persistence import SQLLitePersister
+import uuid
 
 
 def encode_audio_to_base64(file_bytes):
     encoded_string = base64.b64encode(file_bytes).decode('utf-8')
     return encoded_string
+
+PROJECT_ID = "release_botvov_debug_tracking"
 
 
 class BotVOVState(BaseModel):
@@ -36,39 +40,27 @@ class BotVOVState(BaseModel):
         )
 
 @functools.lru_cache(maxsize=128)
-def _get_applications(project_id: str, app_id: str=None) -> Application:
+def _get_applications(app_id: str | None=None) -> Application:
     graph = build_graph()
-    tracker = LocalTrackingClient(project=project_id)
-    if app_id is not None:
-        builder = (
-            ApplicationBuilder()
-            .with_graph(graph)
-            .with_tracker(tracker := LocalTrackingClient(project=project_id))
-            .with_identifiers(app_id=app_id)
-            .initialize_from(
-                tracker,
-                resume_at_next_action=True,
-                default_state={"query": "Xin chào"},
-                default_entrypoint="process_input",
-            )
+    sqllite_persister =  SQLLitePersister(db_path="/app/botvov/.sqllite.db", table_name="burr_state", connect_kwargs={"check_same_thread": False})
+    sqllite_persister.initialize()
+    builder = (
+        ApplicationBuilder()
+        .with_graph(graph)
+        .initialize_from(
+            initializer=sqllite_persister,
+            resume_at_next_action=True,
+            default_state={"query": "Xin chào"},
+            default_entrypoint="process_input",
         )
-    else:
-        builder = (
-            ApplicationBuilder()
-            .with_graph(graph)
-            .with_tracker(tracker := LocalTrackingClient(project=project_id))
-            .with_identifiers()
-            .initialize_from(
-                initializer=tracker,
-                resume_at_next_action=True,
-                default_state={"query": "Xin chào", "command": None},
-                default_entrypoint="process_input",
-            )
-        )
+        .with_state_persister(sqllite_persister)
+        .with_identifiers(app_id=app_id)
+        .with_tracker("local", project=PROJECT_ID)
+    )
     return builder.build()
 
-def _run_through(project_id: str, app_id: str, inputs: Dict[str, Any]) -> BotVOVState:  
-    botvov_application = _get_applications(project_id, app_id)
+def _run_through(app_id: str, inputs: Dict[str, Any]) -> BotVOVState:  
+    botvov_application = _get_applications(app_id=app_id)
     botvov_application.run(
         halt_after=["format_results"],
         inputs=inputs
@@ -93,20 +85,19 @@ def runner():
         allow_headers=["*"],  # Allows all headers
     )
 
-    # @router.post("/create_new") # not use 
-    # def create_new_application() -> str:
-    #     app = _get_applications("1")
-    #     return app.uid
+    @router.post("/create_new") # not use 
+    def create_new_application() -> str:
+        new_app = _get_applications(app_id=str(uuid.uuid4()))
+        return new_app.uid
     
     @router.post("/send_audio_query")
-    def send_audio_query(audio: UploadFile = File(...)):
+    def send_audio_query(app_id: str, audio: UploadFile = File(...)):
         audio_bytes = audio.file.read()
         audio_base64 = encode_audio_to_base64(audio_bytes)
         user_query = STT_service(audio_base64)
         response = _run_through(
-            "1",
-            "1",
-            {
+            app_id=app_id,
+            inputs={
                 "user_query": user_query
             }
         )
@@ -117,8 +108,8 @@ def runner():
         }
 
     @router.get("/get_audio_response")
-    def get_audio_response():
-        response = BotVOVState.from_app(_get_applications("1", "1"))
+    def get_audio_response(app_id: str):
+        response = BotVOVState.from_app(_get_applications(app_id=app_id))
         # Call an async TTS function
         audio_base64 = asyncio.run(TTS_service(response.response))
         audio_response = base64.b64decode(audio_base64)
