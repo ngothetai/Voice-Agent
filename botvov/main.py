@@ -11,9 +11,9 @@ from pydantic import BaseModel
 from typing import Dict, Any
 
 from burr.core import Application, ApplicationBuilder
-from burr.tracking import LocalTrackingClient
 from burr.core.persistence import SQLLitePersister
 import uuid
+import json
 
 
 def encode_audio_to_base64(file_bytes):
@@ -40,7 +40,7 @@ class BotVOVState(BaseModel):
         )
 
 @functools.lru_cache(maxsize=128)
-def _get_applications(app_id: str | None=None) -> Application:
+def _get_applications(app_id: str) -> Application:
     graph = build_graph()
     sqllite_persister =  SQLLitePersister(db_path="/app/botvov/.sqllite.db", table_name="burr_state", connect_kwargs={"check_same_thread": False})
     sqllite_persister.initialize()
@@ -86,12 +86,20 @@ def runner():
     )
 
     class CreateApplicationResponse(BaseModel):
+        status_code: int
         uid: str
+        message: str
+        status: bool
 
-    @router.post("/create_new", response_model=CreateApplicationResponse, summary="Create new app for new user", description="Register new user_id for new client to user later") # not use 
+    @router.get("/create_new", response_model=CreateApplicationResponse, summary="Create new app for new user", description="Register new user_id for new client to user later") # not use 
     def create_new_application():
         new_app = _get_applications(app_id=str(uuid.uuid4()))
-        response = CreateApplicationResponse(uid=new_app.uid)
+        response = CreateApplicationResponse(
+            status_code=200,
+            message="Response successful",
+            uid=new_app.uid,
+            status=True
+        )
         return response.model_dump()
 
     class CommandResponse(BaseModel):
@@ -99,61 +107,89 @@ def runner():
         message_id: str
         message: str
 
-    class AudioQueryResponse(BaseModel):
+    class QueryResponse(BaseModel):
         status_code: int
         text_response: str
         data: CommandResponse | None
         message: str
         status: bool
 
-    @router.post("/send_audio_query", response_model=AudioQueryResponse, summary="Send an audio query", description="Processes an audio query and returns the response.")
-    def send_audio_query(app_id: str, audio: UploadFile = File(...)):
-        """
-        Processes an audio query and returns the response.
-
-        - **app_id**: The application ID
-        - **audio**: The audio file to be processed
-        """
+    @router.post(
+        "/send_audio_query",
+        summary="Send an audio query",
+        description="Processes an audio query and returns the command.",
+        response_class=Response,
+        responses={
+            200: {
+                "description": "Audio Response",
+                "content": {
+                    "audio/wav": {}
+                }
+            }
+        }
+    )
+    def send_audio_query(uid: str, audio: UploadFile = File(...)):
         try:
             audio_bytes = audio.file.read()
         except Exception as e:
-            return {
+            return Response(content=json.dumps({
                 "status_code": 400,
-                "text_response": "",
                 "data": None,
                 "message": "Invalid file type error",
                 "status": False
-            }
+            }), media_type="application/json", status_code=400)
         
         audio_base64 = encode_audio_to_base64(audio_bytes)
         
         try:
             user_query = STT_service(audio_base64)
         except Exception as e:
-            return {
+            return Response(content=json.dumps({
                 "status_code": 423,
-                "text_response": "",
                 "data": None,
                 "message": "Error recognition audio",
                 "status": False
-            }
+            }), media_type="application/json", status_code=423)
             
         try:
             response = _run_through(
-                app_id=app_id,
+                app_id=uid,
                 inputs={
                     "user_query": user_query
                 }
             )
         except Exception as e:
-            return {
+            return Response(content=json.dumps({
                 "status_code": 422,
-                "text_response": "",
                 "data": None,
                 "message": "No response AI",
                 "status": False
-            }
-    
+            }), media_type="application/json", status_code=422)
+        
+        try:
+            audio_base64 = asyncio.run(TTS_service(response.response))
+        except Exception as e:
+            return Response(content=json.dumps({
+                "status_code": 424,
+                "message": "Error speech text",
+                "status": False
+            }), media_type="application/json", status_code=424)
+        
+        audio_response: bytes = base64.b64decode(audio_base64)
+        
+        return Response(content=audio_response, media_type="audio/wav", headers={
+            "Content-Disposition": "attachment; filename=response.wav"
+        }, status_code=200)
+
+
+    @router.get(
+        "/get_audio_response",
+        response_model=QueryResponse,
+        summary="Get command query",
+        description="Processes an audio query and returns the command."
+    )
+    def get_command_response(uid: str):
+        response = BotVOVState.from_app(_get_applications(app_id=uid))
         return {
             "status_code": 200,
             "text_response": response.response,
@@ -162,26 +198,6 @@ def runner():
             "status": True
         }
 
-
-    @router.get("/get_audio_response")
-    def get_audio_response(app_id: str):
-        response = BotVOVState.from_app(_get_applications(app_id=app_id))
-        # Call an async TTS function
-        try:
-            audio_base64 = asyncio.run(TTS_service(response.response))
-        except Exception as e:
-            return {
-                "status_code": 424,
-                "text_response": "",
-                "message": "Error speech text",
-                "status": False
-            }
-        audio_response = base64.b64decode(audio_base64)
-        
-        return Response(content=audio_response, media_type="audio/wav", headers={
-            "Content-Disposition": "inline; filename=response.wav"
-        })
-
     app.include_router(router, prefix="/botvov", tags=["botvov-api"])
 
     # init home path
@@ -189,9 +205,8 @@ def runner():
     async def home():
         return {"message": "Welcome to VOV Assistant!"}
 
-    
     return app
-            
+
 
 app = runner()
 

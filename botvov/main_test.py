@@ -151,6 +151,7 @@ def _open_channel(channel_id: str) -> Dict[str, Any]:
     """
     Open the channel with the given its id. User don't know about the channel id.
     User only know about channel name, so whenever they give any request about the channel it has nothing to do with the channel id.
+    You must find the channel id from the channel name and open it by use _open_channel tool.
     """
     #@TODO: Implement: Change to open the channel with the given id
     json_channels = json.load(open("./botvov/channels_vov.json", "r"))
@@ -158,6 +159,7 @@ def _open_channel(channel_id: str) -> Dict[str, Any]:
     for type_channel, l in json_channels.items():
         for channel in l:
             mapped_channel_list_and_id[channel['id']] = tuple([channel['name'], type_channel])
+
     return {
         "action response": f"Radio is opening the channel: {mapped_channel_list_and_id[channel_id][0]}. Wait for a moment.",
         "data": {
