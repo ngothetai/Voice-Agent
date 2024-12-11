@@ -6,12 +6,13 @@ services:
         target: app_server
     image: app_server
     working_dir: /app
-    command:
-      - poetry run python -m botvov.main
+    # command:
+    #   - poetry run python -m botvov.main
     volumes:
       - ./botvov:/app/botvov
     ports:
-      - "5000:5000"
+      - 5000:5000
+      - 5001:5001
     networks:
       - app_network
     deploy:
@@ -53,8 +54,8 @@ services:
       target: speech2text
     image: speech2text
     restart: unless-stopped
-    ports:
-      - 9000:9000
+    # ports:
+    #   - 9000:9000
     volumes:
       - ./models:/root/faster-whisper-server/models
     command: >
@@ -65,7 +66,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['all']
+              # chose the GPU device id - second GPU
+              device_ids: ["1"]
               capabilities: [gpu]
               # If you have CDI feature enabled use the following instead
               # https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/cdi-support.html
@@ -82,8 +84,8 @@ services:
       context: .
       target: text2speech
     image: text2speech
-    ports:
-      - 6000:6000
+    # ports:
+    #   - 6000:6000
     volumes:
       - ./text2speech:/app/text2speech
     runtime: nvidia
