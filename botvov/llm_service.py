@@ -30,6 +30,19 @@ def encode_audio_to_base64(file_bytes: bytes) -> str:
     return encoded_string
 
 
+def user_query_format(user_query: str):
+    return {
+        "role": "user",
+        "content": user_query
+    }
+    
+def assistant_response_format(assistant_response: str):
+    return {
+        "role": "assistant",
+        "content": assistant_response
+    }
+
+
 @functools.lru_cache
 def _get_llm_client():
     assistant = OpenAI(
@@ -45,42 +58,12 @@ def _get_instructor_client():
     return instructor.from_openai(assistant)
 
 
-@action(reads=[], writes=["query"])
+@action(reads=["query"], writes=["query"])
 def process_input(state: State, user_query) -> State:
     """Processes input from user and updates state with the input."""
-    return state.update(
-        query=user_query
+    return state.append(
+        query=user_query_format(user_query)
     )
-
-
-# def _get_channel_list() -> Dict[str, str]:
-#     """
-#     Get the list of channel from VOV provider
-#     """
-#     try:
-#         response = requests.get("https://adminmedia.kythuatvov.vn/api/channels?zarsrc=30&utm_source=zalo&utm_medium=zalo&utm_campaign=zalo&gidzl=ZIYZFoy_8M2FDAinBI4eRuysgZ0m9oTdn62gPM5m9Z2JPwjdPteYD9Llg6PbVYPYm6l_CJYH9RjcA3qgRG")
-#         response.raise_for_status()
-#         xml_content = response.content.decode("utf-8")
-#         channels = json.loads(xml_content)['data']['TV'] + json.loads(xml_content)['data']['Radio']['Tất cả kênh']
-        
-#         # Get only "id" and "name" from each dict element in res list using map
-#         channels = list(map(lambda x: {"id": x["id"], "name": x["name"]}, channels))
-        
-#         # Convert to string
-#         channels = json.dumps(channels)
-        
-#         return {
-#             "channels": channels
-#         }
-        
-#     except requests.exceptions.RequestException as e:
-#         return {
-#             "channels": f"An error occurred: {e}"
-#         }
-#     finally:
-#         return {
-#             "channels": "An error occurred."
-#         }
 
 
 def _fallback_tool(response: str) -> Dict[str, str]:
@@ -126,6 +109,8 @@ ASSISTANT_TOOLS = [
 def select_tool(state: State) -> State:
     """Selects the tool + assigns the parameters. Uses the tool-calling API."""
     
+    query = state["query"]
+    
     messages = [
         {
             "role": "system",
@@ -136,12 +121,8 @@ def select_tool(state: State) -> State:
                 "Again, if you can't use one tool provided to answer the question, use the fallback tool and provide a reason. "
                 "You must select exactly one tool no matter what, filling in every parameters with your best guess. Do not skip out on parameters!"
             ),
-        },
-        {
-            "role": "user",
-            "content": state["query"]
         }
-    ]
+    ] + query
     
     response = _get_llm_client().chat.completions.create(
         model=MODEL_NAME, 
@@ -155,7 +136,7 @@ def select_tool(state: State) -> State:
         return state.update(
             tool="fallback_tool",
             tool_parameters={
-                "response": "No tool was selected, instead response was: {response.choices[0].message}."
+                "response": f"No tool was selected, instead response was: {response.choices[0].message}."
             },
         )
     fn = response.choices[0].message.tool_calls[0].function
@@ -168,29 +149,6 @@ def call_tool(state: State, tool_function: Callable) -> State:
     response = tool_function(**state["tool_parameters"])
     return state.update(tool_response=response)
 
-
-### Define the actions for the assistant
-# def _open_channel(channel_id: str) -> Dict[str, Any]:
-#     """
-#     Open the channel with the given its id. User don't know about the channel id.
-#     User only know about channel name, so whenever they give any request about the channel it has nothing to do with the channel id.
-#     You must find the channel id from the channel name and open it by use _open_channel tool.
-#     """
-#     #@TODO: Implement: Change to open the channel with the given id
-#     json_channels = json.load(open("./botvov/channels_vov.json", "r"))
-#     mapped_channel_list_and_id: Dict[str, Tuple[str, str]] = dict()
-#     for type_channel, l in json_channels.items():
-#         for channel in l:
-#             mapped_channel_list_and_id[channel['id']] = tuple([channel['name'], type_channel])
-
-#     return {
-#         "action response": f"Radio is opening the channel: {mapped_channel_list_and_id[channel_id][0]}. Wait for a moment.",
-#         "data": {
-#             "type": mapped_channel_list_and_id[channel_id][1],
-#             "message_id": channel_id,
-#             "message": mapped_channel_list_and_id[channel_id][0]
-#         }
-#     }
 
 def _fallback_action(response: str) -> Dict[str, Any]:
     """Tells the user that the assistant can't do any action -- this should be a fallback"""
@@ -232,28 +190,29 @@ ASSISTANT_ACTIONS = [
 def select_action(state: State) -> State:
     """Action to synthetic the results and do the needed action.
     """
+    
+    query = state["query"]
+    
     response = _get_llm_client().chat.completions.create(
         model=MODEL_NAME,
         messages=[
             {
                 "role": "system",
-                "content": (
-                "You are a helpful assistant. Use the supplied actions to assist the user, if they apply in any way. Remember to use the actions!"
-                "They can perform some actions, or control some devices that you cannot do yourself."
-                "If you can't use only the actions provided to help the user requirements but know how to do, please provide the answer"
-                "If you cannot use the actions provided to meet user requirements, use the fallback tool and provide a reason. "
-                "Again, if you can't use one action provided to answer the user requirements, use the fallback tool and provide a reason. "
-                "You must select exactly one action no matter what, filling in every parameters with your best guess. Do not skip out on parameters!"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"The original question was: {state['query']}."
-                    f"The context data is: {state['tool_response']}."
-                ),
-            },
-        ],
+                "content": f"""
+                    You are a helpful assistant. Use the supplied actions to assist the user, if they apply in any way. Remember to use the actions!
+                    They can perform some actions, or control some devices that you cannot do yourself.
+                    If you can't use only the actions provided to help the user requirements but know how to do, please provide the answer
+                    If you cannot use the actions provided to meet user requirements, use the fallback tool and provide a reason.
+                    Again, if you can't use one action provided to answer the user requirements, use the fallback tool and provide a reason.
+                    You must select exactly one action no matter what, filling in every parameters with your best guess. Do not skip out on parameters!
+                
+                <tool_response>
+                    {state['tool_response']}
+                </tool_response>
+                """
+                ,
+            }
+        ] + query,
         tools=ASSISTANT_ACTIONS,
         temperature=TEMPERATURE,
     )
@@ -262,7 +221,7 @@ def select_action(state: State) -> State:
         return state.update(
             action="fallback_action",
             action_parameters={
-                "response": "No action was selected, instead response was: {response.choices[0].message}."
+                "response": f"No action was selected, instead response was: {response.choices[0].message}."
             },
         )
     else:
@@ -282,31 +241,62 @@ def format_results(state: State) -> State:
     """Action to format the results in a usable way. Note we're not cascading in context for the chat history.
     This is largely due to keeping it simple, but you'll likely want to pass IDs around or maintain the chat history yourself
     """
-    response = _get_llm_client().chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+    
+    query = state["query"]
+    
+    messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are a helpful assistant."
-                    "Your task is to answer briefly, accurately and only in Vietnamese."
-                    "Extract and answer the final information as detailed as possible, eliminate all redundant information and unnecessary context."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"The original question was: {state['query']}."
-                    f"The response from tool calling is: {state['tool_response']}."
-                    f"The response from action calling is: {state['action_response']}."
-                    "Please answer briefly in Vietnamese, providing only the final information that directly answers the user's question."
-                ),
-            },
-        ],
+                "content": f"""
+                    You are a helpful assistant.
+                    Your task is to answer briefly, accurately and only in Vietnamese.
+                    Extract and answer the final information as detailed as possible, eliminate all redundant information and unnecessary context.
+                    Please answer briefly in Vietnamese, providing only the final information that directly answers the user's question.
+                <tool_response>
+                    {state['tool_response']}
+                </tool_response>
+                
+                
+                <action_response>
+                    {state['action_response']}
+                </action_response>
+                """
+                ,
+            }
+        ] + query
+    response = _get_llm_client().chat.completions.create(
+        model=MODEL_NAME,
+        messages=messages,
         temperature=TEMPERATURE,
     )
+    final_output = response.choices[0].message.content
+    
+    # history_message = [
+    #     messages[1],
+        
+    # ]
 
-    return state.update(final_output=response.choices[0].message.content)
+    return state.update(
+        final_output=final_output
+    ).append(
+        query=messages[1]
+    ).append(
+        query={
+            "role": "assistant",
+            "content": f"""
+                <tool_response>
+                    {state['tool_response']}
+                </tool_response>
+                
+                
+                <action_response>
+                    {state['action_response']}
+                </action_response>
+                
+                {final_output}
+            """
+        }
+    )
 
 
 def build_graph():

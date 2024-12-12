@@ -8,7 +8,7 @@ from botvov.stt_service import STT_service
 from botvov.tts_service import TTS_service
 from botvov.llm_service import build_graph
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from burr.core import Application, ApplicationBuilder
 from burr.core.persistence import SQLLitePersister
@@ -25,7 +25,7 @@ PROJECT_ID = "release_botvov_debug_tracking"
 
 class BotVOVState(BaseModel):
     app_id: str
-    query: str
+    query: List[Dict[str, Any]]
     response: str
     command: Any
     
@@ -50,7 +50,7 @@ def _get_applications(app_id: str) -> Application:
         .initialize_from(
             initializer=sqllite_persister,
             resume_at_next_action=True,
-            default_state={"query": "Xin chào"},
+            default_state={"command": None},
             default_entrypoint="process_input",
         )
         .with_state_persister(sqllite_persister)
