@@ -6,7 +6,7 @@ import base64
 import asyncio
 from botvov.stt_service import STT_service
 from botvov.tts_service import TTS_service
-from botvov.main_test import build_graph
+from botvov.llm_service import build_graph
 from pydantic import BaseModel
 from typing import Dict, Any
 
