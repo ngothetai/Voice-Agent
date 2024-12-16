@@ -1,5 +1,5 @@
 import functools
-from fastapi import FastAPI, Response, File, UploadFile, APIRouter
+from fastapi import FastAPI, Response, File, UploadFile, APIRouter, Form
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import base64
@@ -88,7 +88,7 @@ def runner():
     class CreateApplicationResponse(BaseModel):
         status_code: int
         uid: str
-        message: str
+        message: Any
         status: bool
 
     @router.get("/create_new", response_model=CreateApplicationResponse, summary="Create new app for new user", description="Register new user_id for new client to user later") # not use 
@@ -104,8 +104,8 @@ def runner():
 
     class CommandResponse(BaseModel):
         type: str
-        message_id: str
-        message: str
+        message_id: str | None
+        message: Any
 
     class QueryResponse(BaseModel):
         status_code: int
@@ -128,7 +128,7 @@ def runner():
             }
         }
     )
-    def send_audio_query(uid: str, audio: UploadFile = File(...)):
+    def send_audio_query(uid: str, lat: str, long: str, audio: UploadFile = File(...)):
         try:
             audio_bytes = audio.file.read()
         except Exception as e:
@@ -155,7 +155,9 @@ def runner():
             response = _run_through(
                 app_id=uid,
                 inputs={
-                    "user_query": user_query
+                    "user_query": user_query,
+                    "lat": lat,
+                    "long": long
                 }
             )
         except Exception as e:

@@ -13,6 +13,9 @@ from burr.core.graph import GraphBuilder
 import inspect
 import requests
 from botvov.tool_calling.VOV import VOVChannelProvider
+from botvov.tool_calling.Timer import TimeProvider
+from botvov.tool_calling.Weather import WeatherProvider
+from botvov.tool_calling.Broadcast import VOVChannelBroadcastSchedule
 
 
 # Read configurations from environment variables
@@ -23,6 +26,9 @@ ATTEMPTS = int(os.getenv('ATTEMPTS', '10'))
 
 # Init some tool calling
 vov_channel_provider = VOVChannelProvider()
+time_provider = TimeProvider()
+weather_provider = WeatherProvider()
+broadcast_schedule_provider = VOVChannelBroadcastSchedule()
 
 
 def encode_audio_to_base64(file_bytes: bytes) -> str:
@@ -58,11 +64,14 @@ def _get_instructor_client():
     return instructor.from_openai(assistant)
 
 
-@action(reads=["query"], writes=["query"])
-def process_input(state: State, user_query) -> State:
+@action(reads=["query"], writes=["query", "lat", "long"])
+def process_input(state: State, user_query, lat, long) -> State:
     """Processes input from user and updates state with the input."""
     return state.append(
         query=user_query_format(user_query)
+    ).update(
+        lat=lat,
+        long=long
     )
 
 
@@ -101,11 +110,14 @@ ASSISTANT_TOOLS = [
     }
     for fn_name, fn in {
         "query_channels": vov_channel_provider._get_channel_list,
+        "query_time": time_provider._get_current_time,
+        "query_weather": weather_provider._query_weather,
+        "query_broadcast_schedule": broadcast_schedule_provider._get_broadcast_schedule,
         "fallback_tool": _fallback_tool,
     }.items()
 ]
 
-@action(reads=["query"], writes=["tool_parameters", "tool"])
+@action(reads=["query", "lat", "long"], writes=["tool_parameters", "tool"])
 def select_tool(state: State) -> State:
     """Selects the tool + assigns the parameters. Uses the tool-calling API."""
     
@@ -114,13 +126,17 @@ def select_tool(state: State) -> State:
     messages = [
         {
             "role": "system",
-            "content": (
-                "You are a helpful assistant. Use the supplied tools to assist the user, if they apply in any way. Remember to use the tools! They can do stuff you can't."
-                "If you can't use only the tools provided to answer the question but know the answer, please provide the answer"
-                "If you cannot use the tools provided to answer the question, use the fallback tool and provide a reason. "
-                "Again, if you can't use one tool provided to answer the question, use the fallback tool and provide a reason. "
-                "You must select exactly one tool no matter what, filling in every parameters with your best guess. Do not skip out on parameters!"
-            ),
+            "content": (f"""
+                You are a helpful assistant. Use the supplied tools to assist the user, if they apply in any way. Remember to use the tools! They can do stuff you can't.
+                If you can't use only the tools provided to answer the question but know the answer, please provide the answer
+                If you cannot use the tools provided to answer the question, use the fallback tool and provide a reason.
+                Again, if you can't use one tool provided to answer the question, use the fallback tool and provide a reason.
+                You must select exactly one tool no matter what, filling in every parameters with your best guess. Do not skip out on parameters!
+                
+                <location>
+                    "latitute": {state['lat']}, "longitute": {state['long']}
+                </location>
+            """),
         }
     ] + query
     
@@ -182,6 +198,9 @@ ASSISTANT_ACTIONS = [
     }
     for fn_name, fn in {
         "open_channel": vov_channel_provider._open_channel,
+        "show_time": time_provider._show_time,
+        "show_weather": weather_provider._show_weather,
+        "show_broadcast_schedule": broadcast_schedule_provider._show_broadcast_schedule,
         "fallback_action": _fallback_action,
     }.items()
 ]
@@ -200,7 +219,7 @@ def select_action(state: State) -> State:
                 "role": "system",
                 "content": f"""
                     You are a helpful assistant. Use the supplied actions to assist the user, if they apply in any way. Remember to use the actions!
-                    They can perform some actions, or control some devices that you cannot do yourself.
+                    They can perform some actions, control some devices, and specially show detail information to screen that you cannot do yourself.
                     If you can't use only the actions provided to help the user requirements but know how to do, please provide the answer
                     If you cannot use the actions provided to meet user requirements, use the fallback tool and provide a reason.
                     Again, if you can't use one action provided to answer the user requirements, use the fallback tool and provide a reason.
@@ -309,18 +328,30 @@ def build_graph():
             select_action,
             format_results,
             query_channels=call_tool.bind(tool_function=vov_channel_provider._get_channel_list),
+            query_time=call_tool.bind(tool_function=time_provider._get_current_time),
+            query_weather=call_tool.bind(tool_function=weather_provider._query_weather),
+            query_broadcast_schedule=call_tool.bind(tool_function=broadcast_schedule_provider._get_broadcast_schedule),
             fallback_tool=call_tool.bind(tool_function=_fallback_tool),
             open_channel=call_action.bind(action_function=vov_channel_provider._open_channel),
+            show_time=call_action.bind(action_function=time_provider._show_time),
+            show_weather=call_action.bind(action_function=weather_provider._show_weather),
+            show_broadcast_schedule=call_action.bind(action_function=broadcast_schedule_provider._show_broadcast_schedule),
             fallback_action=call_action.bind(action_function=_fallback_action),
         )
         .with_transitions(
             ("process_input", "select_tool"),
             ("select_tool", "query_channels", when(tool="query_channels")),
+            ("select_tool", "query_time", when(tool="query_time")),
+            ("select_tool", "query_weather", when(tool="query_weather")),
+            ("select_tool", "query_broadcast_schedule", when(tool="query_broadcast_schedule")),
             ("select_tool", "fallback_tool", when(tool="fallback_tool")),
-            (["query_channels", "fallback_tool"], "select_action"),
+            (["query_channels", "query_time", "query_weather", "query_broadcast_schedule", "fallback_tool"], "select_action"),
             ("select_action", "open_channel", when(action="open_channel")),
             ("select_action", "fallback_action", when(action="fallback_action")),
-            (["open_channel", "fallback_action"], "format_results"),
+            ("select_action", "show_time", when(action="show_time")),
+            ("select_action", "show_weather", when(action="show_weather")),
+            ("select_action", "show_broadcast_schedule", when(action="show_broadcast_schedule")),
+            (["open_channel", "show_time", "show_weather", "show_broadcast_schedule", "fallback_action"], "format_results"),
             ("format_results", "process_input"),
         )
         .build()

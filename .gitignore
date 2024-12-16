@@ -168,3 +168,6 @@ workspace/
 *.pth
 *.bin
 models
+
+# Ignore database files
+*.db
