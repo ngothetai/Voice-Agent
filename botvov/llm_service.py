@@ -7,7 +7,7 @@ from burr.core.graph import GraphBuilder
 import inspect
 from botvov.tool_calling.VOV_channel import VOVChannelProvider
 from botvov.tool_calling.Weather import WeatherProvider
-from botvov.utils import _get_llm_client, _get_instructor_client, user_query_format, read_channel_list
+from botvov.utils import _get_llm_client, _get_instructor_client, user_query_format, read_channel_list, replace_words
 import datetime
 import requests
 from botvov.models import ResponseRouter
@@ -102,6 +102,7 @@ def current_time(state: State) -> State:
                 """
             }
         ],
+        temperature=TEMPERATURE
     )
     response_agent = state.get('response_agent', dict({}))
     response_agent["current_time"] = res.choices[0].message.content
@@ -257,8 +258,19 @@ And you must answer like a human speak. Example: if now clock is 2022-12-15 22:1
             {
                 "role": "system",
                 "content": """
-                You are a professional content editor in Vietnamese, use a text and rewrite it in a more professional and shorten way, and make sure all words are in Vietnamese.
+                You are a best Vietnamese voice announcer and are compiling submitted content into readable text. Note: user can not read the special character and can not read the abbreviate words or English words.
+                Your tasks is to use a text and rewrite it in a more professional and shorten way, and make sure all words are in Vietnamese for user can read easily.
+                Beside, replace abbreviate words into full words.
                 If any paragraph in the text contains a long list, replace it with a summary of the main idea of ​​that paragraph or provide general information.
+                Example:
+                - Original: "0,37 mét/phút"
+                - Rewrite: "0 phẩy 37 mét mỗi phút"
+                
+                - Original: "11 độ Celsius"
+                - Rewrite: "11 độ C"
+                
+                - Original: "81% diện tích"
+                - Rewrite: "81 phần trăm diện tích"
                 """
             },
             {
@@ -266,7 +278,10 @@ And you must answer like a human speak. Example: if now clock is 2022-12-15 22:1
                 "content": final_output
             }
         ],
+        temperature=TEMPERATURE
     ).choices[0].message.content
+    
+    rewrite = replace_words(rewrite)
 
     # detele the response agent of the channel_list
     if "channel_list" in response_agent:

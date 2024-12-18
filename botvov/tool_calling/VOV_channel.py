@@ -26,6 +26,7 @@ class VOVChannelProvider:
                     "role": "system",
                     "content": f"""
                     You are a professional radio operator, you are responsible for opening the radio channel for the audience to listen to.
+                    Note: Any user quey which has mention with channel, so it always is the channel name because user never know about the channel id.
                     Use the information extracted from computer data and open the channel by channel id for the audience to listen to and provide response radio is opening channel by name.
                     Note: If in user query has open/ play channel command, you must provide the channel id and set open_channel to True. If not, you must provide the channel list and set open_channel to False.
                     <channel_list>

@@ -5,6 +5,7 @@ import os
 from botvov.utils import _get_llm_client
 
 MODEL_NAME = os.getenv('MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+TEMPERATURE = float(os.getenv('TEMPERATURE', '0.5'))
 
 
 class WeatherProvider:
@@ -32,21 +33,23 @@ class WeatherProvider:
                     "content": json.dumps(weather)
                 }
             ],
+            temperature=0.2,
         )
         
         # Re-write the response
-        res = ai.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a professional content editor, use a paragraph and rewrite it in a more professional and shorten way, and make sure all words are in Vietnamese."
-                },
-                {
-                    "role": "user",
-                    "content": str(res.choices[0].message.content)
-                }
-            ],
-        )
+        # res = ai.chat.completions.create(
+        #     model=MODEL_NAME,
+        #     messages=[
+        #         {
+        #             "role": "system",
+        #             "content": "You are a professional content editor, use a paragraph and rewrite it in a more professional and shorten way, and make sure all words are in Vietnamese."
+        #         },
+        #         {
+        #             "role": "user",
+        #             "content": str(res.choices[0].message.content)
+        #         }
+        #     ],
+        #     temperature=TEMPERATURE,
+        # )
             
         return res.choices[0].message.content

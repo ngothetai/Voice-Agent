@@ -51,3 +51,26 @@ def read_channel_list() -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
             for channel in it:
                 mapped_channel_list_and_id[channel["id"]] = channel["name"]
         return channels, mapped_channel_list_and_id
+    
+
+REPLACE_DICT = {
+    "%": " phần trăm",
+    "°C": " độ C",
+    "°F": " độ F",
+    "km/h": " km mỗi giờ",
+    "m/s": " mét mỗi giây",
+    " mm": " mi li mét",
+    " cm": " xăng ti mét",
+    " m ": " mét ",
+    " km": " ki lô mét",
+    "Celcius": "C",
+    "Fahrenheit": "F",
+    "Celsius": "C",
+    "Farenheit": "F",
+}
+
+
+def replace_words(text: str, replace_dict: Dict[str, str]= REPLACE_DICT) -> str:
+    for k, v in replace_dict.items():
+        text = text.replace(k, v)
+    return text

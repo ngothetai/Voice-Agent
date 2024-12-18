@@ -61,6 +61,7 @@ def _get_applications(app_id: str) -> Application:
 
 def _run_through(app_id: str, inputs: Dict[str, Any]) -> BotVOVState:  
     botvov_application = _get_applications(app_id=app_id)
+    # botvov_application.visualize(output_file_path="./botvov.png")
     botvov_application.run(
         halt_after=["format_results"],
         inputs=inputs
