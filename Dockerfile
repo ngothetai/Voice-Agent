@@ -37,7 +37,6 @@ ENV CUDA_DEVICE_ORDER=PCI_BUS_ID
 ENV NCCL_DEBUG=INFO
 ENTRYPOINT python3 -m vllm.entrypoints.openai.api_server --host 0.0.0.0 --port 8000 --model $MODEL_NAME --gpu_memory_utilization 0.8 --tensor-parallel-size 2 --enable-auto-tool-choice --tool-call-parser hermes
 
-
 FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04 AS speech2text
 # `ffmpeg` is installed because without it `gradio` won't work with mp3(possible others as well) files
 # hadolint ignore=DL3008,DL3015,DL4006

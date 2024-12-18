@@ -1,26 +1,21 @@
 from typing import Any, Dict
 import requests
 import json
-import functools
-from openai import OpenAI
 import os
+from botvov.utils import _get_llm_client
 
 MODEL_NAME = os.getenv('MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
-@functools.lru_cache
-def _get_llm_client():
-    assistant = OpenAI(
-        api_key="cant-be-empty",
-        base_url="http://llm_serve:8000/v1",
-    )
-    return assistant
 
 
 class WeatherProvider:
+    API_key = "ce27d930ccb4ad4d2168b6d38dc6de60"
+    open_weather_url = "https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_key}&lang=vi&units=metric"
+    
     def __init__(self) -> None:
-        self.__API_key = "ce27d930ccb4ad4d2168b6d38dc6de60"
-        self._open_weather_url = "https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_key}&lang=vi&units=metric"
-        
-    def _summary_weather(self, weather: Dict[str, Any]) -> str:
+        pass    
+
+    @classmethod
+    def _summary_weather(cls, weather: Dict[str, Any]) -> str | None:
         ai = _get_llm_client()
         res = ai.chat.completions.create(
             model=MODEL_NAME,
@@ -55,32 +50,3 @@ class WeatherProvider:
         )
             
         return res.choices[0].message.content
-    
-    def _query_weather(self, lat:str, long:str) -> Dict[str, Any]:
-        """
-        Get the weather information now a day
-        """
-        lat = str(round(float(lat), 2))
-        long = str(round(float(long), 2))
-        self._response = requests.get(self._open_weather_url.format(lat=lat, lon=long, API_key=self.__API_key))
-        if self._response.status_code == 200:
-            return {
-                "weather": self._summary_weather(self._response.json())
-            }
-        else:
-            return {
-                "error": "Cannot fetch the weather data"
-            }
-            
-    def _show_weather(self) -> Dict[str, Any]:
-        """
-        Send the weather information for user know
-        """
-        return {
-            "action response": "The weather information was shown.",
-            "data": {
-                "type": "weather",
-                "message_id": None,
-                "message": self._response.json()
-            }
-        }

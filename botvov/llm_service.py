@@ -1,21 +1,16 @@
-from ast import List
-import instructor
-from openai import OpenAI
 import json
-from typing import Callable, Dict, Tuple, Any
-import base64
+from typing import Callable, Dict, Any
 import os
-import functools
-
 from burr.core import State, action, when
 from burr.core.application import ApplicationBuilder
 from burr.core.graph import GraphBuilder
 import inspect
-import requests
-from botvov.tool_calling.VOV import VOVChannelProvider
-from botvov.tool_calling.Timer import TimeProvider
+from botvov.tool_calling.VOV_channel import VOVChannelProvider
 from botvov.tool_calling.Weather import WeatherProvider
-from botvov.tool_calling.Broadcast import VOVChannelBroadcastSchedule
+from botvov.utils import _get_llm_client, _get_instructor_client, user_query_format, read_channel_list
+import datetime
+import requests
+from botvov.models import ResponseRouter
 
 
 # Read configurations from environment variables
@@ -24,48 +19,9 @@ PROMPT_SYSTEM = os.getenv('PROMPT_SYSTEM', 'You are a helpful assistant. Please 
 TEMPERATURE = float(os.getenv('TEMPERATURE', '0.5'))
 ATTEMPTS = int(os.getenv('ATTEMPTS', '10'))
 
-# Init some tool calling
-vov_channel_provider = VOVChannelProvider()
-time_provider = TimeProvider()
-weather_provider = WeatherProvider()
-broadcast_schedule_provider = VOVChannelBroadcastSchedule()
 
-
-def encode_audio_to_base64(file_bytes: bytes) -> str:
-    encoded_string = base64.b64encode(file_bytes).decode('utf-8')
-    return encoded_string
-
-
-def user_query_format(user_query: str):
-    return {
-        "role": "user",
-        "content": user_query
-    }
-    
-def assistant_response_format(assistant_response: str):
-    return {
-        "role": "assistant",
-        "content": assistant_response
-    }
-
-
-@functools.lru_cache
-def _get_llm_client():
-    assistant = OpenAI(
-        api_key="cant-be-empty",
-        base_url="http://llm_serve:8000/v1",
-    )
-    return assistant
-
-
-@functools.lru_cache
-def _get_instructor_client():
-    assistant = _get_llm_client()
-    return instructor.from_openai(assistant)
-
-
-@action(reads=["query"], writes=["query", "lat", "long"])
-def process_input(state: State, user_query, lat, long) -> State:
+@action(reads=[], writes=["query", "lat", "long"])
+def process_input(state: State, user_query:str, lat: str, long: str) -> State:
     """Processes input from user and updates state with the input."""
     return state.append(
         query=user_query_format(user_query)
@@ -75,245 +31,253 @@ def process_input(state: State, user_query, lat, long) -> State:
     )
 
 
-def _fallback_tool(response: str) -> Dict[str, str]:
-    """Tells the user that the assistant can't do that -- this should be a fallback"""
-    return {"response": response}
-
-
-TYPE_MAP = {
-    str: "string",
-    int: "integer",
-    float: "number",
-    bool: "boolean",
-}
-
-
-ASSISTANT_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": fn_name,
-            "description": fn.__doc__ or fn_name,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    param.name: {
-                        "type": TYPE_MAP.get(param.annotation)
-                        or "string",  # TODO -- add error cases
-                        "description": param.name,
-                    }
-                    for param in inspect.signature(fn).parameters.values()
-                },
-                "required": [param.name for param in inspect.signature(fn).parameters.values()],
-            },
-        },
-    }
-    for fn_name, fn in {
-        "query_channels": vov_channel_provider._get_channel_list,
-        "query_time": time_provider._get_current_time,
-        "query_weather": weather_provider._query_weather,
-        "query_broadcast_schedule": broadcast_schedule_provider._get_broadcast_schedule,
-        "fallback_tool": _fallback_tool,
-    }.items()
-]
-
-@action(reads=["query", "lat", "long"], writes=["tool_parameters", "tool"])
-def select_tool(state: State) -> State:
-    """Selects the tool + assigns the parameters. Uses the tool-calling API."""
+@action(reads=["query", "response_agent"], writes=["response_agent", "command"])
+def channel_list(state: State) -> State:
+    user_query = state["query"]
+    channel_respone = VOVChannelProvider.extract_channel_id(user_query)
+    channel_list, mapped_channel_list_and_id = read_channel_list()
     
-    query = state["query"]
-    
-    messages = [
-        {
-            "role": "system",
-            "content": (f"""
-                You are a helpful assistant. Use the supplied tools to assist the user, if they apply in any way. Remember to use the tools! They can do stuff you can't.
-                If you can't use only the tools provided to answer the question but know the answer, please provide the answer
-                If you cannot use the tools provided to answer the question, use the fallback tool and provide a reason.
-                Again, if you can't use one tool provided to answer the question, use the fallback tool and provide a reason.
-                You must select exactly one tool no matter what, filling in every parameters with your best guess. Do not skip out on parameters!
-                
-                <location>
-                    "latitute": {state['lat']}, "longitute": {state['long']}
-                </location>
-            """),
+    response_agent = state.get("response_agent", dict({}))
+    response_agent["channel_list"] = f"System is playing {mapped_channel_list_and_id[channel_respone.channel_id]} channel for you."
+        
+    return state.update(
+        response_agent=response_agent,
+        command={
+            "type": "VOV",
+            "message_id": channel_respone.channel_id,
+            "message": mapped_channel_list_and_id[channel_respone.channel_id]
         }
-    ] + query
-    
-    response = _get_llm_client().chat.completions.create(
-        model=MODEL_NAME, 
-        messages=messages,
-        tools=ASSISTANT_TOOLS,
-        temperature=TEMPERATURE,
     )
+
+
+@action(reads=["query", "response_agent"], writes=["response_agent", "command"])
+def broadcast_schedule(state: State) -> State:
+    channel_response = VOVChannelProvider.extract_channel_id(state['query'].copy())
+    _, mapped_channel_list_and_id = read_channel_list()
+    date = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime("%d-%m-%Y")
+
+    response = requests.get(VOVChannelProvider.broadcast_schedule_url.format(channel_id=channel_response.channel_id, start_date=date, end_date=date))
     
-    # Extract the tool name and parameters from OpenAI's response
-    if len(response.choices[0].message.tool_calls) == 0:
-        return state.update(
-            tool="fallback_tool",
-            tool_parameters={
-                "response": f"No tool was selected, instead response was: {response.choices[0].message}."
-            },
-        )
-    fn = response.choices[0].message.tool_calls[0].function
-
-    return state.update(tool=fn.name, tool_parameters=json.loads(fn.arguments))
-
-@action(reads=["tool_parameters"], writes=["tool_response"])
-def call_tool(state: State, tool_function: Callable) -> State:
-    """Action to call the tool. This will be bound to the tool function."""
-    response = tool_function(**state["tool_parameters"])
-    return state.update(tool_response=response)
-
-
-def _fallback_action(response: str) -> Dict[str, Any]:
-    """Tells the user that the assistant can't do any action -- this should be a fallback"""
-    return {
-        "action response": response,
-        "command": {
-            "name": "open_channel",
-            "content": None
+    if response.status_code == 200:
+        res = VOVChannelProvider._preprocess_broadcast_json(response.json())
+        if res:
+            response_agent = state.get('response_agent', dict({}))
+            response_agent["broadcast_schedule"] = json.dumps({
+                f"{mapped_channel_list_and_id[channel_response.channel_id]} broadcast schedule": res
+            })
+            return state.update(
+                response_agent=response_agent,
+                command={
+                    "type": "broadcast_schedule",
+                    "message_id": str(channel_response.channel_id),
+                    "message": response.json()['data']
+                }
+            )
+    response_agent = state.get('response_agent', dict({}))
+    response_agent["broadcast_schedule"] = "Error while fetching data from VOV provider"
+    return state.update(
+        response_agent=response_agent,
+        command={
+            "type": "broadcast_schedule",
+            "message_id": None,
+            "message": None
         }
-    }
+    )
 
-ASSISTANT_ACTIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": fn_name,
-            "description": fn.__doc__ or fn_name,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    param.name: {
-                        "type": TYPE_MAP.get(param.annotation)
-                        or "string",  # TODO -- add error cases
-                        "description": param.name,
-                    }
-                    for param in inspect.signature(fn).parameters.values()
-                },
-                "required": [param.name for param in inspect.signature(fn).parameters.values()],
-            },
-        },
-    }
-    for fn_name, fn in {
-        "open_channel": vov_channel_provider._open_channel,
-        "show_time": time_provider._show_time,
-        "show_weather": weather_provider._show_weather,
-        "show_broadcast_schedule": broadcast_schedule_provider._show_broadcast_schedule,
-        "fallback_action": _fallback_action,
-    }.items()
-]
 
-@action(reads=["query","tool_response"], writes=["action_parameters","action"])
-def select_action(state: State) -> State:
-    """Action to synthetic the results and do the needed action.
-    """
-    
-    query = state["query"]
-    
-    response = _get_llm_client().chat.completions.create(
+@action(reads=[], writes=["response_agent", "command"])
+def current_time(state: State) -> State:
+    ai = _get_llm_client()
+    res = ai.chat.completions.create(
         model=MODEL_NAME,
         messages=[
             {
                 "role": "system",
                 "content": f"""
-                    You are a helpful assistant. Use the supplied actions to assist the user, if they apply in any way. Remember to use the actions!
-                    They can perform some actions, control some devices, and specially show detail information to screen that you cannot do yourself.
-                    If you can't use only the actions provided to help the user requirements but know how to do, please provide the answer
-                    If you cannot use the actions provided to meet user requirements, use the fallback tool and provide a reason.
-                    Again, if you can't use one action provided to answer the user requirements, use the fallback tool and provide a reason.
-                    You must select exactly one action no matter what, filling in every parameters with your best guess. Do not skip out on parameters!
+                You are a professional clock, use the information extracted from computer data and provide the current time for the audience to know.
                 
-                <tool_response>
-                    {state['tool_response']}
-                </tool_response>
+                <current_time>
+                    {datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime("%d-%m-%Y %H:%M:%S")}
+                </current_time>
                 """
-                ,
             }
-        ] + query,
-        tools=ASSISTANT_ACTIONS,
-        temperature=TEMPERATURE,
+        ],
     )
-    # Extract the tool name and parameters from OpenAI's response
-    if len(response.choices[0].message.tool_calls) == 0:
+    response_agent = state.get('response_agent', dict({}))
+    response_agent["current_time"] = res.choices[0].message.content
+    return state.update(
+        response_agent=response_agent,
+        command={
+            "type": "time",
+            "message_id": None,
+            "message": None
+        }
+    )
+
+
+@action(reads=["lat", "long", "response_agent"], writes=["response_agent", "command"])
+def weather(state: State) -> State:
+    lat = str(round(float(state['lat']), 2))
+    long = str(round(float(state['long']), 2))
+    response = requests.get(WeatherProvider.open_weather_url.format(lat=lat, lon=long, API_key=WeatherProvider.API_key))
+    if response.status_code == 200:
+        response_agent: Dict = state.get('response_agent', dict({}))
+        response_agent["weather"] = WeatherProvider._summary_weather(response.json())
         return state.update(
-            action="fallback_action",
-            action_parameters={
-                "response": f"No action was selected, instead response was: {response.choices[0].message}."
-            },
+            response_agent=response_agent,
+            command={
+                "type": "weather",
+                "message_id": None,
+                "message": response.json()
+            }
         )
     else:
-        fn = response.choices[0].message.tool_calls[0].function
-        return state.update(action=fn.name, action_parameters=json.loads(fn.arguments))
+        response_agent = state.get('response_agent', dict({}))
+        response_agent["weather"] = "Error while fetching data from OpenWeather"
+        return state.update(
+            response_agent=response_agent,
+            command={
+                "type": "weather",
+                "message_id": None,
+                "message": None
+            }
+        )
+        
 
-@action(reads=["action_parameters"], writes=["action_response","command"])
-def call_action(state: State, action_function: Callable) -> State:
-    """Action to call the tool. This will be bound to the tool function."""
-    result = action_function(**state["action_parameters"])
-    response = result.get("action response")
-    command = result.get("data")
-    return state.update(action_response=response).update(command=command)
+@action(reads=["query", "command"], writes=["next_agent"])
+def router(state: State) -> State:
+    """Selects the tool + assigns the parameters. Uses the tool-calling API."""
+    query = state["query"].copy()
+    
+    messages = [
+        {
+            "role": "system",
+            "content": ("""
+                You are a world-class router. Your task is to route the user query to the correct next agent in a list agents below.
+                The agents can handle the related task that user asked or provide the information that user asked.
+                But if the user query is not actually related to any agents, you must return fallback.
+                Choose carefully because if the question is not related to any agent and you still call that agent, something bad will happen.
+                
+                You can access agents: 
+                [
+                    {
+                        "agent_name": "channel_list",
+                        "description": "Agent can access the list of VOV channels, play/open the channel. It can handle tasks like: 'Play VOV1 channel', 'Open VOV2 channel', 'List all VOV channels',..." 
+                    },
+                    {
+                        "agent_name": "current_time",
+                        "description": "Agent can provide the current time. It can handle tasks like: 'What time is it now?', 'What is the current time?',..."
+                    },
+                    {
+                        "agent_name": "broadcast_schedule",
+                        "description": "Agent can provide the broadcast schedule of VOV channels. It can handle tasks like: 'What is the broadcast schedule of VOV1 channel?', 'What is the schedule of VOV2 channel?',..."
+                    },
+                    {
+                        "agent_name": "weather",
+                        "description": "Agent can provide the weather information of the location. It can handle tasks like: 'What is the weather?'."
+                    },
+                    {
+                        "agent_name": "fallback",
+                        "description": "You can handle yourself the user query that is not related to any agent."
+                    }
+                ]
+                Please route the user query to the correct agent by agent name.
+                Example:
+                - user_query: "What is the weather like?"
+                - next_agent: "weather"
+                
+                - user_query: "What is the broadcast schedule of VOV1 channel?"
+                - next_agent: "broadcast_schedule"
+                
+                - user_query: "Open VOV1"
+                - next_agent: "channel_list"
+                
+                - user_query: "What time is it now?"
+                - next_agent: "current_time"
+                
+                - user_query: "Show me the food population in Hanoi?"
+                - next_agent: "fallback"
+            """),
+        }
+    ] + query
+    
+    choice = _get_instructor_client().chat.completions.create(
+        model=MODEL_NAME, 
+        messages=messages,
+        temperature=TEMPERATURE,
+        top_p=0.8,
+        response_model=ResponseRouter
+    )
 
-@action(reads=["query", "action_response", "tool_response"], writes=["final_output"])
+    return state.update(
+        next_agent=choice.choice
+    )
+
+
+@action(reads=["query", "response_agent"], writes=["final_output", "query"])
 def format_results(state: State) -> State:
-    """Action to format the results in a usable way. Note we're not cascading in context for the chat history.
-    This is largely due to keeping it simple, but you'll likely want to pass IDs around or maintain the chat history yourself
+    response_agent = state.get("response_agent", {})
+    query = state["query"].copy()
+    
+    content = """
+You are a world-class assistant.
+Your task is to write final answer for user query accurately and only in Vietnamese.
+Extract the context below, and answer the final information as detailed as possible, eliminate all redundant information and unnecessary context.
+Please answer naturaly, clearly and shorty in Vietnamese, providing only the final information that user should be know. If the user query is not enough information, you can ask for more information.
+And you must answer like a human speak. Example: if now clock is 2022-12-15 22:16:41, you must answer "Bây giờ là 10 giờ 30 phút sáng ngày 20 tháng 10 năm 2022".
     """
     
-    query = state["query"]
+    # Add the response agent to the query
+    for key, value in response_agent.items():
+        content += f"""\n
+        <{key}>
+            {value}
+        </{key}>
+        """
     
     messages = [
             {
                 "role": "system",
-                "content": f"""
-                    You are a helpful assistant.
-                    Your task is to answer briefly, accurately and only in Vietnamese.
-                    Extract and answer the final information as detailed as possible, eliminate all redundant information and unnecessary context.
-                    Please answer briefly in Vietnamese, providing only the final information that directly answers the user's question.
-                <tool_response>
-                    {state['tool_response']}
-                </tool_response>
-                
-                
-                <action_response>
-                    {state['action_response']}
-                </action_response>
-                """
-                ,
+                "content": content
             }
         ] + query
+    
     response = _get_llm_client().chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
         temperature=TEMPERATURE,
     )
+    
     final_output = response.choices[0].message.content
     
-    # history_message = [
-    #     messages[1],
-        
-    # ]
+    # rewrite the final output
+    rewrite = _get_llm_client().chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": """
+                You are a professional content editor in Vietnamese, use a text and rewrite it in a more professional and shorten way, and make sure all words are in Vietnamese.
+                If any paragraph in the text contains a long list, replace it with a summary of the main idea of ​​that paragraph or provide general information.
+                """
+            },
+            {
+                "role": "user",
+                "content": final_output
+            }
+        ],
+    ).choices[0].message.content
 
+    # detele the response agent of the channel_list
+    if "channel_list" in response_agent:
+        state["response_agent"].pop("channel_list")
+    
     return state.update(
-        final_output=final_output
-    ).append(
-        query=messages[1]
+        final_output=rewrite
     ).append(
         query={
             "role": "assistant",
-            "content": f"""
-                <tool_response>
-                    {state['tool_response']}
-                </tool_response>
-                
-                
-                <action_response>
-                    {state['action_response']}
-                </action_response>
-                
-                {final_output}
-            """
+            "content": rewrite
         }
     )
 
@@ -324,39 +288,26 @@ def build_graph():
         GraphBuilder()
         .with_actions(
             process_input,
-            select_tool,
-            select_action,
+            router,
             format_results,
-            query_channels=call_tool.bind(tool_function=vov_channel_provider._get_channel_list),
-            query_time=call_tool.bind(tool_function=time_provider._get_current_time),
-            query_weather=call_tool.bind(tool_function=weather_provider._query_weather),
-            query_broadcast_schedule=call_tool.bind(tool_function=broadcast_schedule_provider._get_broadcast_schedule),
-            fallback_tool=call_tool.bind(tool_function=_fallback_tool),
-            open_channel=call_action.bind(action_function=vov_channel_provider._open_channel),
-            show_time=call_action.bind(action_function=time_provider._show_time),
-            show_weather=call_action.bind(action_function=weather_provider._show_weather),
-            show_broadcast_schedule=call_action.bind(action_function=broadcast_schedule_provider._show_broadcast_schedule),
-            fallback_action=call_action.bind(action_function=_fallback_action),
+            channel_list,
+            broadcast_schedule,
+            current_time,
+            weather,
         )
         .with_transitions(
-            ("process_input", "select_tool"),
-            ("select_tool", "query_channels", when(tool="query_channels")),
-            ("select_tool", "query_time", when(tool="query_time")),
-            ("select_tool", "query_weather", when(tool="query_weather")),
-            ("select_tool", "query_broadcast_schedule", when(tool="query_broadcast_schedule")),
-            ("select_tool", "fallback_tool", when(tool="fallback_tool")),
-            (["query_channels", "query_time", "query_weather", "query_broadcast_schedule", "fallback_tool"], "select_action"),
-            ("select_action", "open_channel", when(action="open_channel")),
-            ("select_action", "fallback_action", when(action="fallback_action")),
-            ("select_action", "show_time", when(action="show_time")),
-            ("select_action", "show_weather", when(action="show_weather")),
-            ("select_action", "show_broadcast_schedule", when(action="show_broadcast_schedule")),
-            (["open_channel", "show_time", "show_weather", "show_broadcast_schedule", "fallback_action"], "format_results"),
+            ("process_input", "router"),
+            ("router", "channel_list", when(next_agent="channel_list")),
+            ("router", "broadcast_schedule", when(next_agent="broadcast_schedule")),
+            ("router", "current_time", when(next_agent="current_time")),
+            ("router", "weather", when(next_agent= "weather")),
+            ("router", "format_results", when(next_agent= "fallback")),
+            (["channel_list", "broadcast_schedule", "current_time", "weather"],  "format_results"),
             ("format_results", "process_input"),
         )
         .build()
     )
-    
+
 if __name__ == "__main__":
     app = (ApplicationBuilder()
         .with_graph(build_graph())
